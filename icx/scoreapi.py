@@ -4,7 +4,7 @@ import json
 import click
 import re
 
-from . import util
+from . import util, service
 
 def type_to_str(item: dict) -> str:
     result = ''
@@ -83,8 +83,8 @@ def dumps(entries: list, sep: str = '\n') -> str:
 @click.option('--raw', '-r', type=bool, is_flag=True)
 @click.option('--filter', '-f', type=str, default=None)
 def get_apis(addr: str, raw: bool = False, filter: str = None):
-    service = util.get_service()
-    api = service.get_score_api(util.ensure_address(addr))
+    svc = service.get_instance()
+    api = svc.get_score_api(util.ensure_address(addr))
     if filter is not None:
         regex = re.compile(filter)
         new_api = []
