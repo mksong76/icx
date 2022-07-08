@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 from audioop import add
+from cProfile import label
 from datetime import timedelta
 import locale
 import os
@@ -207,15 +208,22 @@ def show_asset_of(addr: str):
     bonded, unbonding, _ = sum_bond(bond)
     asset = balance+claimable+staked+unstaking
 
-    entries = [
-        [ 'BALANCE', balance, balance/asset ] ,
-        [ 'STAKED', staked, staked/asset ],
-        [ '- DELEGATED', delegated, delegated/staked ],
-        [ '- BONDED', bonded, bonded/staked ],
-        [ '- UNBONDING', unbonding, unbonding/staked ],
-        [ '- REMAINS', voting_power, voting_power/staked ],
-        [ 'UNSTAKE', unstaking, unstaking/asset ],
-        [ 'CLAIMABLE', claimable, claimable/asset ],
+    entries = []
+    if asset > 0 :
+        entries.append([ 'BALANCE', balance, balance/asset ])
+        if staked > 0:
+            entries += [
+                [ 'STAKED', staked, staked/asset ],
+                [ '- DELEGATED', delegated, delegated/staked ],
+                [ '- BONDED', bonded, bonded/staked ],
+                [ '- UNBONDING', unbonding, unbonding/staked ],
+                [ '- REMAINS', voting_power, voting_power/staked ],
+            ]
+        entries += [
+            [ 'UNSTAKE', unstaking, unstaking/asset ],
+            [ 'CLAIMABLE', claimable, claimable/asset ],
+        ]
+    entries += [
         [ 'ASSET', asset, 1.0 ],
         [ 'PRICE', ICX, 0.0 ]
     ]
@@ -226,8 +234,6 @@ def show_asset_of(addr: str):
 
     print(f'[#] ADDRESS       : {addr}')
     for entry in entries:
-        if entry[1] == 0:
-            continue
         print(f'[#] {entry[0]:13s} : {entry[1]/ICX:12.3f} ICX {entry[1]*price//ICX:12n} {sym} {entry[2]*100:7.3f}%')
 
 @click.command("auto")
