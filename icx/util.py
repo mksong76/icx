@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 
-import getpass
 import json
-import os
+import sys
 from time import sleep
 from typing import Any
 
@@ -51,3 +50,10 @@ def rest_get(url) -> Any:
         raise f"HTTPError(status={resp.status_code}) "
     return resp.json()
 
+def dump_json(value: any, fp=sys.stdout):
+    def json_handler(x) -> any:
+        if isinstance(x, bytes):
+            return '0x'+x.hex()
+        raise TypeError(f'UnknownType(type={type(x)})')
+    json.dump(value, fp=fp, indent=2, default=json_handler)
+    print('', file=fp)

@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 
 import json
-import getpass
 import os
 
-from iconsdk.wallet.wallet import Wallet, KeyWallet
+import click
+from iconsdk.wallet.wallet import KeyWallet, Wallet
+
 
 class MyWallet(Wallet):
     def __init__(self, file: str, password: str = None) -> None:
@@ -19,7 +20,7 @@ class MyWallet(Wallet):
     def __get_loaded(self) -> Wallet:
         if self.__wallet is None:
             if self.__password is None:
-                password = getpass.getpass(prompt="WalletPassword:")
+                password = click.prompt("WalletPassword", hide_input=True)
             else:
                 password = self.__password
             self.__wallet = KeyWallet.load(self.file, password)
