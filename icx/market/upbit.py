@@ -8,7 +8,7 @@ import requests
 # Example https://api.upbit.com/v1/ticker?markets=KRW-ICX
 UPBIT_TICKER_URL='https://api.upbit.com/v1/ticker'
 
-def getPrice(sym: str, market: str) -> Tuple[str,float]:
+def getPrice(sym: str, market: str = 'KRW') -> Tuple[str,float]:
     res = requests.get(UPBIT_TICKER_URL, { 'markets': f'{market}-{sym}' })
     try:
         obj = res.json()[0]

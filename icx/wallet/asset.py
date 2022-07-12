@@ -230,7 +230,7 @@ def show_asset_of(addr: str):
 
     locale.setlocale(locale.LC_ALL, '')
     try :
-        sym, price = upbit.getPrice('ICX', 'KRW')
+        sym, price = upbit.getPrice('ICX')
     except:
         print(f'[!] FAIL to get price of ICX', file=sys.stderr)
         sym = 'ICX'
