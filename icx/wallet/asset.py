@@ -238,7 +238,7 @@ def show_asset_of(addr: str):
 
     print(f'[#] ADDRESS       : {addr}')
     for entry in entries:
-        print(f'[#] {entry[0]:13s} : {entry[1]/ICX:12.3f} ICX {entry[1]*price//ICX:12n} {sym} {entry[2]*100:7.3f}%')
+        print(f'[#] {entry[0]:13s} : {entry[1]//ICX:12,}.{entry[1]%ICX*1000//ICX:03d} ICX {entry[1]*price//ICX:12,} {sym} {entry[2]*100:7.3f}%')
 
 @click.command("auto")
 @click.option("--balance", type=int, default=0, help="Minimum balance to maintain", envvar="ICX_BALANCE")
