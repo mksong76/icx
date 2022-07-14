@@ -2,9 +2,8 @@
 
 import click
 
-from icx.wallet import asset
-
-from . import scoreapi, basic, preps, call
+from . import scoreapi, basic, preps, call, blockinterval, rlp
+from .wallet import asset
 
 @click.group()
 def main():
@@ -16,6 +15,9 @@ main.add_command(basic.get_trace, 'trace')
 main.add_command(basic.get_block, 'block')
 main.add_command(basic.get_tx, 'tx')
 main.add_command(basic.get_result, 'result')
+main.add_command(basic.get_data, 'data')
+main.add_command(blockinterval.block_interval, 'interval')
+main.add_command(rlp.convert, 'rlp')
 main.add_command(call.call, 'call')
 main.add_command(preps.main, 'prep')
 main.add_command(asset.main, 'asset')

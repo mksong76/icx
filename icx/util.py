@@ -3,7 +3,7 @@
 import json
 import sys
 from time import sleep
-from typing import Any
+from typing import Any, Union
 
 import requests
 
@@ -57,3 +57,20 @@ def dump_json(value: any, fp=sys.stdout):
         raise TypeError(f'UnknownType(type={type(x)})')
     json.dump(value, fp=fp, indent=2, default=json_handler)
     print('', file=fp)
+
+def ensure_block(id: str) -> Union[int, str]:
+    if len(id) >= 64:
+        return ensure_hash(id)
+    elif id == 'latest':
+        return id
+    else:
+        id = int(id, 0)
+    return id
+
+def ensure_hash(value: str) -> str:
+    if not value.startswith('0x'):
+        value = '0x'+value
+    bs = bytes.fromhex(value[2:])
+    if len(bs) != 32:
+        raise Exception('InvalidHashValue(len(hash)!=32)')
+    return value
