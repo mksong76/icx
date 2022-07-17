@@ -12,7 +12,7 @@ from iconsdk.builder.call_builder import CallBuilder
 from iconsdk.builder.transaction_builder import CallTransactionBuilder
 
 from . import scoreapi, service, wallet
-from .util import ensure_address
+from .util import ensure_address, dump_json
 
 METHOD_FMT = r'(?P<address>[a-z_0-9]+)(\.(?P<method>[a-zA-Z0-9_]+))?'
 RE_METHOD = re.compile(METHOD_FMT)
@@ -51,6 +51,17 @@ def make_params(inputs: list, params: List[str]) -> dict:
         param_data[name] = parse_param(input, params[idx])
     return param_data
 
+def parse_output(outputs: list, output: any) -> any:
+    tname = outputs[0]['type']
+    if tname == 'int':
+        return int(output, 0)
+    elif tname == 'bool':
+        return bool(int(output, 0))
+    elif tname in ['str', 'Address', 'bytes']:
+        return output
+    else:
+        return json.dumps(output, indent=2)
+
 @click.command('call')
 @click.argument('expr')
 @click.argument('param', nargs=-1)
@@ -71,10 +82,7 @@ def call(expr: str, param: List[str], value: str = 0, keystore: str = None, raw:
 
     method = obj.group('method')
     if method is None:
-        if raw:
-            print(json.dumps(api))
-        else:
-            print(scoreapi.dumps(api))
+        print(scoreapi.dumps(api))
         return
 
     methods = list(filter(lambda x: x['type'] == 'function' and method == x['name'], api))
@@ -90,10 +98,13 @@ def call(expr: str, param: List[str], value: str = 0, keystore: str = None, raw:
     if 'readonly' in info and info['readonly'] == '0x1':
         params = make_params(info['inputs'], param)
         value = svc.call(CallBuilder(to=addr, method=method, params=params).build())
-        print(json.dumps(value))
+        if raw:
+            dump_json(value)
+        else:
+            print(parse_output(info['outputs'], value))
     else:
         w = wallet.get_instance(keystore)
         params = make_params(info['inputs'], param)
         tx = CallTransactionBuilder(from_=w.address, to=addr, method=method, params=params, value=value). build()
         result = svc.estimate_and_send_tx(tx, w)
-        print(json.dumps(result))
+        dump_json(result)
