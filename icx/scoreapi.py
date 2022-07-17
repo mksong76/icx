@@ -40,10 +40,12 @@ def outputs_to_str(outputs: list) -> str:
 
 def api_entry_to_str(entry: dict) -> str:
     tn = entry['type']
-    if tn == 'function':
+    if tn in ['function', 'fallback']:
         items = []
 
-        if 'readonly' in entry and entry['readonly'] == '0x1':
+        if tn == 'fallback':
+            items.append(click.style('fallback', fg='magenta', bold=True))
+        elif 'readonly' in entry and entry['readonly'] == '0x1':
             items.append(click.style('readonly', fg='yellow', bold=True))
         else:
             items.append(click.style('writable', fg='red', bold=True))
