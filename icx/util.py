@@ -2,6 +2,7 @@
 
 import json
 import sys
+from enum import Enum
 from time import sleep
 from typing import Any, Union
 
@@ -74,3 +75,30 @@ def ensure_hash(value: str) -> str:
     if len(bs) != 32:
         raise Exception('InvalidHashValue(len(hash)!=32)')
     return value
+
+class Shorten(Enum):
+    RIGHT=0
+    MIDDLE=1
+    LEFT=2
+
+def shorten(s: str, length: int, method: Shorten=Shorten.RIGHT, replace: str = '~') -> str:
+    s_len = len(s)
+    if s_len <= length:
+        return s
+    e_len = len(replace)
+    to_skip = (s_len-length)+e_len
+    if method == Shorten.MIDDLE:
+        right = (s_len-to_skip)//2
+        left = s_len-to_skip-right
+        return s[:left]+replace+s[-right:]
+    elif method == Shorten.LEFT:
+        return replace+s[to_skip:]
+    else:
+        return s[:s_len-to_skip]+replace
+
+def format_decimals(value: Union[str,int], f: int=2) -> str:
+    if type(value) is not int:
+        value = int(str(value), 0)
+    i_value = value//ICX
+    f_value = (value%ICX)*(10**f)//ICX
+    return f'{{:,}}.{{:0{f}d}}'.format(i_value, f_value)

@@ -2,7 +2,7 @@
 
 import click
 
-from . import scoreapi, basic, preps, call, blockinterval, rlp, trace
+from . import scoreapi, basic, preps, call, blockinterval, rlp, trace, txscan
 from .wallet import asset
 
 @click.group()
@@ -17,6 +17,7 @@ main.add_command(basic.get_result, 'result')
 main.add_command(basic.get_data, 'data')
 main.add_command(trace.get_trace, 'trace')
 main.add_command(blockinterval.block_interval, 'interval')
+main.add_command(txscan.scan, 'txscan')
 main.add_command(rlp.convert, 'rlp')
 main.add_command(call.call, 'call')
 main.add_command(preps.main, 'prep')
