@@ -44,11 +44,13 @@ def api_entry_to_str(entry: dict) -> str:
         items = []
 
         if tn == 'fallback':
-            items.append(click.style('fallback', fg='magenta', bold=True))
+            items.append(click.style('fallback', fg='red', bold=True))
         elif 'readonly' in entry and entry['readonly'] == '0x1':
             items.append(click.style('readonly', fg='yellow', bold=True))
         else:
             items.append(click.style('writable', fg='red', bold=True))
+        if 'payable' in entry and entry['payable'] == '0x1':
+            items.append(click.style('payable', fg='magenta', bold=True))
 
         inputs = []
         for input in entry['inputs']:
