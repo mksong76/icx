@@ -48,6 +48,7 @@ def make_params(inputs: list, params: List[str]) -> dict:
                 continue
             raise Exception(f'More Parameter is required next={name}')
         param_data[name] = parse_param(input, params[idx])
+        idx += 1
     return param_data
 
 def parse_output(outputs: list, output: any) -> any:
