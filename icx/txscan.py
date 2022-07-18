@@ -56,7 +56,7 @@ TX_COLUMNS = {
     'value': Column(lambda title, tx: format_value(dict_get(tx, 'value', '0')), 20, format='{:>20}'),
 }
 TX_HEIGHT_COLUMN = Column(lambda title, tx: title, 8, format='{:>8}')
-DEFAULT_COLUMN_NAMES = [ 'id', 'from...', 'type', 'method', 'to...', 'value' ]
+DEFAULT_COLUMN_NAMES = [ 'id', 'from...', 'type', 'method', 'to', 'value' ]
 
 class RowPrinter:
     def __init__(self, columns: List[Column], file=sys.stdout) -> None:
