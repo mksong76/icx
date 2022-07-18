@@ -24,6 +24,11 @@ def parse_param(input: dict, param: str) -> any:
     if tname == 'int':
         value = int(param, 0)
         return hex(value)
+    if tname == 'bool':
+        if param.lower() in ['true', 'false']:
+            return hex(param.lower() == 'true')
+        else:
+            return hex(int(param, 0))
     if tname == 'bytes':
         if not param.startswith("0x"):
             raise Exception(f'Invalid bytes value={param}')
