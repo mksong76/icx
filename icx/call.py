@@ -46,8 +46,7 @@ def make_params(inputs: list, params: List[str]) -> dict:
             if 'default' in input:
                 idx += 1
                 continue
-            print(f'More parameter is required next={name}', file=sys.stderr)
-            return
+            raise Exception(f'More Parameter is required next={name}')
         param_data[name] = parse_param(input, params[idx])
     return param_data
 
