@@ -10,6 +10,7 @@ import click
 
 from iconsdk.builder.call_builder import CallBuilder
 from iconsdk.builder.transaction_builder import CallTransactionBuilder
+from iconsdk.icon_service import  SignedTransaction
 
 from . import scoreapi, service, wallet
 from .util import ensure_address, dump_json
@@ -72,8 +73,9 @@ def parse_output(outputs: list, output: any) -> any:
 @click.argument('param', nargs=-1)
 @click.option('--value')
 @click.option("--keystore")
+@click.option('--step_limit', '-s', help="step limit")
 @click.option('--raw', '-r', is_flag=True)
-def call(expr: str, param: List[str], value: str = 0, keystore: str = None, raw: bool = False):
+def call(expr: str, param: List[str], value: str = 0, keystore: str = None, raw: bool = False, step_limit: str = None):
     obj = RE_METHOD.match(expr)
     if obj is None:
         raise Exception(f'Invalid parameter param={expr}')
@@ -110,6 +112,10 @@ def call(expr: str, param: List[str], value: str = 0, keystore: str = None, raw:
     else:
         w = wallet.get_instance(keystore)
         params = make_params(info['inputs'], param)
-        tx = CallTransactionBuilder(from_=w.address, to=addr, method=method, params=params, value=value). build()
-        result = svc.estimate_and_send_tx(tx, w)
+        tx = CallTransactionBuilder(from_=w.address, to=addr, method=method, params=params, value=value).build()
+        if step_limit != None:
+            signed_tx = SignedTransaction(tx, w, int(step_limit, 0))
+            result = svc.send_transaction_and_pull(signed_tx)
+        else:
+            result = svc.estimate_and_send_tx(tx, w)
         dump_json(result)
