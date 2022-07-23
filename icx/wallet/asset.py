@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 
+import locale
+import sys
 from audioop import add
 from cProfile import label
 from datetime import timedelta
-import locale
-import os
-import sys
 from typing import List, Tuple
 
 import click
@@ -14,11 +13,14 @@ from iconsdk.builder.transaction_builder import CallTransactionBuilder
 from iconsdk.icon_service import SignedTransaction, Transaction
 from iconsdk.wallet.wallet import Wallet
 
-from ..market import upbit
 from .. import service
+from ..config import CONTEXT_CONFIG, Config
+from ..market import upbit
 from ..util import CHAIN_SCORE, ICX, ensure_address
 from . import wallet
 
+CONFIG_TARGET_BALANCES = "target_balances"
+CONTEXT_ASSET = 'asset'
 
 class AssetService:
     def __init__(self, url: str = None):
@@ -171,20 +173,27 @@ def sum_bond(bond: dict) -> Tuple[int, int, int]:
     votingPower = int(bond['votingPower'], 0)
     return bonded, unbonding, votingPower
 
-asset_wallet: Wallet = None
-def get_wallet() -> Wallet:
-    global asset_wallet
-    if asset_wallet is None:
-        ks = os.getenv('ICX_KEY_STORE')
-        asset_wallet = wallet.get_instance(ks)
-    return asset_wallet
+def get_target_balance(config: Config, addr: str, balance: int = 0) -> int:
+    balances = config[CONFIG_TARGET_BALANCES]
+    if addr in balances:
+        return balances[addr]
+    else:
+        return balance
+
+def set_target_balance(config: Config, addr: str, balance: int):
+    balances = config[CONFIG_TARGET_BALANCES]
+    if addr not in balances or balances[addr] != balance:
+        balances[addr] = balance
+        config[CONFIG_TARGET_BALANCES] = balances
+
 
 @click.command('show')
 @click.argument('address', nargs=-1)
-def show_asset(address: List[str]):
+@click.pass_obj
+def show_asset(ctx: dict, address: List[str]):
     if len(address) == 0:
-        show_asset_of(get_wallet().get_address())
-        return
+        wallet: Wallet = ctx[CONTEXT_ASSET]
+        address = [ wallet.get_address ]
     for item in address:
         show_asset_of(item)
 
@@ -241,11 +250,18 @@ def show_asset_of(addr: str):
         print(f'[#] {entry[0]:13s} : {entry[1]//ICX:12,}.{entry[1]%ICX*1000//ICX:03d} ICX {entry[1]*price//ICX:12,} {sym} {entry[2]*100:7.3f}%')
 
 @click.command("auto")
-@click.option("--balance", type=int, default=0, help="Minimum balance to maintain", envvar="ICX_BALANCE")
+@click.option("--balance", type=int, help="Minimum balance to maintain", envvar="ICX_ASSET_BALANCE")
 @click.option("--noclaim", type=bool, is_flag=True)
-def stake_auto(balance: int, noclaim: bool):
+@click.pass_obj
+def stake_auto(ctx: dict, balance: int = None, noclaim: bool = False):
     service = AssetService()
-    wallet = get_wallet()
+    config: Config = ctx[CONTEXT_CONFIG]
+    wallet: Wallet = ctx[CONTEXT_ASSET]
+    if balance is None:
+        balance = get_target_balance(config, wallet.get_address())
+    else:
+        set_target_balance(config, wallet.get_address(), balance)
+
     min_balance = balance*ICX + ICX
     max_balance = min_balance + ICX
 
@@ -299,11 +315,14 @@ def stake_auto(balance: int, noclaim: bool):
           file=sys.stderr)
 
 @click.group()
-@click.option('--key_store')
-def main(key_store: str = None):
-    global asset_wallet
+@click.option('--key_store', envvar='ICX_ASSET_KEY_STORE')
+@click.pass_obj
+def main(ctx: dict, key_store: str = None):
     if key_store is not None:
-        asset_wallet = wallet.get_instance(key_store)
+        ctx[CONTEXT_ASSET] = wallet.get_instance(key_store)
+    else:
+        ctx[CONTEXT_ASSET] = wallet.get_instance()
+
 
 main.add_command(show_asset)
 main.add_command(stake_auto)
