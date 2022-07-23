@@ -73,9 +73,10 @@ def parse_output(outputs: list, output: any) -> any:
 @click.argument('param', nargs=-1)
 @click.option('--value')
 @click.option("--keystore")
-@click.option('--step_limit', '-s', help="step limit")
+@click.option('--step_limit', '-s', help="Step limit")
+@click.option('--height', '-h', help="Block height for query")
 @click.option('--raw', '-r', is_flag=True)
-def call(expr: str, param: List[str], value: str = 0, keystore: str = None, raw: bool = False, step_limit: str = None):
+def call(expr: str, param: List[str], value: str = 0, keystore: str = None, raw: bool = False, step_limit: str = None, height: str = None):
     obj = RE_METHOD.match(expr)
     if obj is None:
         raise Exception(f'Invalid parameter param={expr}')
@@ -104,7 +105,9 @@ def call(expr: str, param: List[str], value: str = 0, keystore: str = None, raw:
     info = methods[0]
     if 'readonly' in info and info['readonly'] == '0x1':
         params = make_params(info['inputs'], param)
-        value = svc.call(CallBuilder(to=addr, method=method, params=params).build())
+        if height is not None:
+            height = int(height, 0)
+        value = svc.call(CallBuilder(to=addr, method=method, params=params, height=height).build())
         if raw:
             dump_json(value)
         else:
@@ -112,7 +115,7 @@ def call(expr: str, param: List[str], value: str = 0, keystore: str = None, raw:
     else:
         w = wallet.get_instance(keystore)
         params = make_params(info['inputs'], param)
-        tx = CallTransactionBuilder(from_=w.address, to=addr, method=method, params=params, value=value).build()
+        tx = CallTransactionBuilder(from_=w.address, to=addr, method=method, params=params, value=value, nid=svc.nid).build()
         if step_limit != None:
             signed_tx = SignedTransaction(tx, w, int(step_limit, 0))
             result = svc.send_transaction_and_pull(signed_tx)
