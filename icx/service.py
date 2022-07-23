@@ -13,6 +13,7 @@ from iconsdk.wallet.wallet import KeyWallet, Wallet
 from .util import CHAIN_SCORE
 
 MAINNET_URL = 'https://ctz.solidwallet.io/api/v3'
+MAINNET_NID = '0x1'
 
 
 class FailureAfterSend(Exception):
@@ -36,8 +37,13 @@ class TransactionFailure(FailureAfterSend):
 
 
 class Service(IconService):
-    def __init__(self, provider: HTTPProvider):
+    def __init__(self, provider: HTTPProvider, nid: int):
         super().__init__(provider)
+        self.__nid = nid
+
+    @property
+    def nid(self) -> int:
+        return self.__nid
 
     def send_transaction_and_pull(self, tx: SignedTransaction) -> any:
         try:
@@ -67,16 +73,15 @@ class Service(IconService):
             return result
         raise FailureAfterSend(tx_hash, f'Timeout(repeat={repeat})')
 
-URI_ENV='GOLOOP_RPC_URI'
-DEBUG_ENV='GOLOOP_DEBUG_URI'
 cached_service = {}
-def get_instance(url: str = None) -> Service:
+def get_instance(url: str = None, nid: int = None) -> Service:
     global cached_service
 
     if url is None:
-        url = os.getenv(URI_ENV, MAINNET_URL)
+        url = os.getenv('GOLOOP_RPC_URI', MAINNET_URL)
+        nid = int(os.getenv('GOLOOP_RPC_NID', MAINNET_NID), 0)
 
     if url not in cached_service:
-        service = Service(HTTPProvider(url))
+        service = Service(HTTPProvider(url), nid)
         cached_service[url] = service
     return cached_service[url]
