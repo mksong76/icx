@@ -193,7 +193,7 @@ def set_target_balance(config: Config, addr: str, balance: int):
 def show_asset(ctx: dict, address: List[str]):
     if len(address) == 0:
         wallet: Wallet = ctx[CONTEXT_ASSET]
-        address = [ wallet.get_address ]
+        address = [ wallet.get_address() ]
     for item in address:
         show_asset_of(item)
 
