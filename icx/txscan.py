@@ -29,10 +29,11 @@ def dict_get(value: dict, keys: Union[any,list], default = None) -> any:
 
 
 class Column:
-    def __init__(self, get_value, size: int, format: str = None) -> None:
+    def __init__(self, get_value, size: int, format: str = None, name: str = '') -> None:
         self.__get_value = get_value
         self.__size = size
         self.__format = format if format is not None else f'{{:{size}}}'
+        self.__name = name
 
     def get_value(self, *args) -> any:
         return self.__get_value(*args)
@@ -45,31 +46,40 @@ class Column:
     def format(self):
         return self.__format
 
+    @property
+    def name(self):
+        return self.__name
+
 TX_COLUMNS = {
-    'id': Column(lambda title, tx: tx['txHash'], 66),
-    'from': Column(lambda title, tx: dict_get(tx, 'from', '-'), FULL_ADDR_LEN),
-    'from...': Column(lambda title, tx: shorten_address(dict_get(tx, 'from', '-')), SHORT_ADDR_LEN),
-    'type': Column(lambda title, tx: dict_get(tx, 'dataType', 'transfer'), 8),
-    'method': Column(lambda title, tx: shorten(dict_get(tx, ['data', 'method'], '-'), 20), 20),
-    'to': Column(lambda title, tx: dict_get(tx, 'to', '-'), FULL_ADDR_LEN),
-    'to...': Column(lambda title, tx: shorten_address(dict_get(tx, 'to', '-')), SHORT_ADDR_LEN),
-    'value': Column(lambda title, tx: format_value(dict_get(tx, 'value', '0')), 20, format='{:>20}'),
+    'id': Column(lambda title, tx: tx['txHash'], 66, name='ID'),
+    'from': Column(lambda title, tx: dict_get(tx, 'from', '-'), FULL_ADDR_LEN, name='From'),
+    'from...': Column(lambda title, tx: shorten_address(dict_get(tx, 'from', '-')), SHORT_ADDR_LEN, name='From'),
+    'type': Column(lambda title, tx: dict_get(tx, 'dataType', 'transfer'), 8, name='Type'),
+    'method': Column(lambda title, tx: shorten(dict_get(tx, ['data', 'method'], '-'), 20), 20, name='Method'),
+    'to': Column(lambda title, tx: dict_get(tx, 'to', '-'), FULL_ADDR_LEN, name='To'),
+    'to...': Column(lambda title, tx: shorten_address(dict_get(tx, 'to', '-')), SHORT_ADDR_LEN, name='To'),
+    'value': Column(lambda title, tx: format_value(dict_get(tx, 'value', '0')), 20, format='{:>20}', name='Value'),
 }
-TX_HEIGHT_COLUMN = Column(lambda title, tx: title, 8, format='{:>8}')
+TX_HEIGHT_COLUMN = Column(lambda title, tx: title, 8, format='{:>8}', name='Height')
 DEFAULT_COLUMN_NAMES = [ 'id', 'from...', 'type', 'method', 'to', 'value' ]
 
 class RowPrinter:
     def __init__(self, columns: List[Column], file=sys.stdout) -> None:
         formats = []
         seps = []
+        names = []
         for column in columns:
             formats.append(column.format)
             seps.append('-'*column.size)
+            names.append(column.name)
         self.__columns = columns
         self.__file = file
         self.__format_str = '| ' + ' | '.join(formats) + ' |'
         self.__sep_str = '+-' + '-+-'.join(seps) + '-+'
+        self.__header = self.__format_str.format(*names)
 
+    def print_header(self):
+        print(self.__header, file=self.__file)
     def print_separater(self):
         print(self.__sep_str, file=self.__file)
 
@@ -85,7 +95,6 @@ def show_txs(printer: RowPrinter, height: int, txs: list, reverse: bool):
     for tx in txs:
         printer.print_data(title, tx)
         title = ''
-    printer.print_separater()
 
 def merge_filters(filter: list):
     def func(tx:dict ) -> bool:
@@ -144,8 +153,11 @@ def scan(columns, block, forward, nobase, to, method, data_type):
         if len(txs) > 0:
             if not sep_print:
                 printer.print_separater()
+                printer.print_header()
+                printer.print_separater()
                 sep_print = True
             show_txs(printer, height, txs, not forward)
+            printer.print_separater()
         if forward:
             id = height+1
         else:
