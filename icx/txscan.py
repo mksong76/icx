@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from typing import List, Union
+from typing import Iterable, List, Union
 import click
 
 from . import service
@@ -78,22 +78,23 @@ class RowPrinter:
         self.__sep_str = '+-' + '-+-'.join(seps) + '-+'
         self.__header = self.__format_str.format(*names)
 
-    def print_header(self):
-        print(self.__header, file=self.__file)
-    def print_separater(self):
-        print(self.__sep_str, file=self.__file)
+    def print_header(self, **kwargs):
+        click.secho(self.__header, reverse=True, file=self.__file, **kwargs)
 
-    def print_data(self, *args):
+    def print_separater(self, **kwargs):
+        click.secho(self.__sep_str, file=self.__file, **kwargs)
+
+    def print_data(self, *args, **kwargs):
         values = []
         for column in self.__columns:
             values.append(column.get_value(*args))
-        print(self.__format_str.format(*values), file=self.__file)
+        click.secho(self.__format_str.format(*values), file=self.__file, **kwargs)
 
-def show_txs(printer: RowPrinter, height: int, txs: list, reverse: bool):
+def show_txs(printer: RowPrinter, height: int, txs: list, reverse: bool, **kwargs):
     txs = txs.__reversed__() if reverse else txs
     title = str(height)
     for tx in txs:
-        printer.print_data(title, tx)
+        printer.print_data(title, tx, **kwargs)
         title = ''
 
 def merge_filters(filter: list):
@@ -104,17 +105,28 @@ def merge_filters(filter: list):
         return True
     return func
 
+def expand_comma(args: Iterable[str]) -> List[str]:
+    items = []
+    for arg in args:
+        for item in arg.split(','):
+            items.append(item)
+    return items
+
 TC_CLEAR = '\033[K'
 
 @click.command()
-@click.argument('columns', nargs=-1)
-@click.option('--block', default='latest')
+@click.argument('block', default="latest")
+@click.option('--column', '-c', 'columns', multiple=True)
+#@click.argument('columns', nargs=-1)
+#@click.option('--block', '--height', 'block', default='latest')
 @click.option('--forward', type=bool, is_flag=True, default=False)
 @click.option('--nobase', type=bool, is_flag=True, default=False)
-@click.option('--to', default=None)
-@click.option('--method', default=None)
-@click.option('--data_type', default=None)
-def scan(columns, block, forward, nobase, to, method, data_type):
+@click.option('--to', 'receivers', default=None, multiple=True)
+@click.option('--from', 'senders', default=None, multiple=True)
+@click.option('--address', '-a', 'addresses', default=None, multiple=True)
+@click.option('--method', '-m', 'methods', default=None, multiple=True)
+@click.option('--data_type', '-t', 'data_types', default=None, multiple=True)
+def scan(columns: List[str], block, forward, nobase, receivers, senders, addresses, methods, data_types):
     """Scanning transactions
 
     COLUMNS is list of columns to display. Some of following values
@@ -127,17 +139,29 @@ def scan(columns, block, forward, nobase, to, method, data_type):
     tx_filters = []
     if nobase:
         tx_filters.append(lambda tx: dict_get(tx, 'dataType') != 'base')
-    if to is not None:
-        to = ensure_address(to)
-        tx_filters.append(lambda tx: dict_get(tx, 'to') == to)
-    if method is not None:
-        tx_filters.append(lambda tx: dict_get(tx, ['data', 'method']) == method)
-    if data_type is not None:
-        tx_filters.append(lambda tx: dict_get(tx, 'dataType', 'transfer') == data_type)
+    if len(receivers) > 0:
+        receivers = expand_comma(receivers)
+        receivers = tuple(map(lambda x: ensure_address(x), receivers))
+        tx_filters.append(lambda tx: dict_get(tx, 'to') in receivers )
+    if len(senders) > 0:
+        senders = expand_comma(senders)
+        senders = tuple(map(lambda x: ensure_address(x), senders))
+        tx_filters.append(lambda tx: dict_get(tx, 'from') in senders )
+    if len(addresses) > 0:
+        addresses = expand_comma(addresses)
+        addresses = tuple(map(lambda x: ensure_address(x), addresses))
+        tx_filters.append(lambda tx: dict_get(tx, 'from') in addresses or dict_get(tx,'to') in addresses )
+    if len(methods) > 0:
+        tx_filters.append(lambda tx: dict_get(tx, ['data', 'method']) in methods)
+    if len(data_types) > 0:
+        data_types = expand_comma(data_types)
+        tx_filters.append(lambda tx: dict_get(tx, 'dataType', 'transfer') in data_types)
     tx_filter = merge_filters(tx_filters)
 
     if len(columns) == 0:
         columns = DEFAULT_COLUMN_NAMES
+    else:
+        columns = expand_comma(columns)
     column_data = list(map(lambda x: TX_COLUMNS[x], columns))
     column_data.insert(0, TX_HEIGHT_COLUMN)
     printer = RowPrinter(column_data)
@@ -152,12 +176,10 @@ def scan(columns, block, forward, nobase, to, method, data_type):
         txs = list(filter(tx_filter, txs))
         if len(txs) > 0:
             if not sep_print:
-                printer.print_separater()
-                printer.print_header()
-                printer.print_separater()
+                printer.print_header(bold=True)
                 sep_print = True
             show_txs(printer, height, txs, not forward)
-            printer.print_separater()
+            #printer.print_separater()
         if forward:
             id = height+1
         else:
