@@ -219,7 +219,11 @@ def show_asset_of(addr: str):
 
     entries = []
     if asset > 0 :
-        entries.append([ 'BALANCE', balance, balance/asset ])
+        entries += [
+            [ 'BALANCE', balance, balance/asset ],
+            [ 'CLAIMABLE', claimable, claimable/asset ],
+            [ 'UNSTAKE', unstaking, unstaking/asset ],
+        ]
         if staked > 0:
             entries += [
                 [ 'STAKED', staked, staked/asset ],
@@ -228,10 +232,6 @@ def show_asset_of(addr: str):
                 [ '- UNBONDING', unbonding, unbonding/staked ],
                 [ '- REMAINS', voting_power, voting_power/staked ],
             ]
-        entries += [
-            [ 'UNSTAKE', unstaking, unstaking/asset ],
-            [ 'CLAIMABLE', claimable, claimable/asset ],
-        ]
     entries += [
         [ 'ASSET', asset, 1.0 ],
         [ 'PRICE', ICX, 0.0 ]
