@@ -24,9 +24,9 @@ def icon_getPReps() -> any:
 def node_inspect(addr: str) -> any:
     return util.rest_get(f'http://{addr}:9000/admin/chain/icon_dex?informal=true')
 
-def node_get_chain(ip: str) -> any:
-    return util.rest_get(f'http://{ip}:9000/admin/chain')[0]
+def node_get_chain(ip: str, timeout: float = 1.0) -> any:
+    return util.rest_get(f'http://{ip}:9000/admin/chain', timeout=timeout)[0]
 
-def node_get_version(ip: str) -> any:
-    si = util.rest_get(f'http://{ip}:9000/admin/system')
+def node_get_version(ip: str, timeout: float = 1.0) -> any:
+    si = util.rest_get(f'http://{ip}:9000/admin/system', timeout=timeout)
     return si['buildVersion']

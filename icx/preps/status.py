@@ -21,7 +21,8 @@ class PRep:
 @click.command('status')
 @click.option('--file', type=str, default=PREPS_JSON)
 @click.option('--version', type=str)
-def show_status(file: str, version: str):
+@click.option("--timeout", type=click.FLOAT, default=1.5)
+def show_status(file: str, version: str, timeout: float):
     #-------------------------------------------------------------------------------
     #   IP정보를 읽어 들인다.
     #
@@ -76,10 +77,10 @@ def show_status(file: str, version: str):
             'type': GRADE_TO_TYPE[prep['grade']],
             'power': int(prep['power'], 0),
         })
-        future = executor.submit(node_get_chain, info['ip'])
+        future = executor.submit(node_get_chain, info['ip'], timeout=timeout)
         results.append(future)
         item.futures.append(future)
-        future = executor.submit(node_get_version, info['ip'])
+        future = executor.submit(node_get_version, info['ip'], timeout=timeout)
         results.append(future)
         item.futures.append(future)
         items.append(item)
@@ -188,7 +189,7 @@ def show_status(file: str, version: str):
     format+='  NextTerm: %d / %s'
     args+=(next_term, str(time_next.strftime('%H:%M:%S')))
     if version_check is not None:
-        format+='   %s Updated: %d / %d / %d'
-        args+=(version_check, updated_main, updated_nodes, all_nodes)
+        format+='   %s Updated: %d / %d / %d / %d'
+        args+=(version_check, updated_in22, updated_main, updated_nodes, all_nodes)
     format+=LAST_FOOTER
     print(format%args)
