@@ -16,7 +16,7 @@ from iconsdk.wallet.wallet import Wallet
 from .. import service
 from ..config import CONTEXT_CONFIG, Config
 from ..market import upbit
-from ..util import CHAIN_SCORE, ICX, ensure_address
+from ..util import CHAIN_SCORE, ICX, ensure_address, format_decimals
 from . import wallet
 
 CONFIG_TARGET_BALANCES = "target_balances"
@@ -247,7 +247,9 @@ def show_asset_of(addr: str):
 
     print(f'[#] ADDRESS       : {addr}')
     for entry in entries:
-        print(f'[#] {entry[0]:13s} : {entry[1]//ICX:12,}.{entry[1]%ICX*1000//ICX:03d} ICX {entry[1]*price//ICX:12,} {sym} {entry[2]*100:7.3f}%')
+        if entry[1] == 0 and entry[2] == 0:
+            continue
+        print(f'[#] {entry[0]:13s} : {format_decimals(entry[1],3):>16s} ICX {entry[1]*price//ICX:12,} {sym} {entry[2]*100:7.3f}%')
 
 @click.command("auto")
 @click.option("--balance", type=int, help="Minimum balance to maintain", envvar="ICX_ASSET_BALANCE")
