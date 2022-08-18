@@ -74,9 +74,9 @@ def parse_output(outputs: list, output: any) -> any:
 @click.option('--value')
 @click.option("--keystore")
 @click.option('--step_limit', '-s', help="Step limit")
-@click.option('--height', '-h', help="Block height for query")
+@click.option('--height', '-h', type=int, default=None, help="Block height for query")
 @click.option('--raw', '-r', is_flag=True)
-def call(expr: str, param: List[str], value: str = 0, keystore: str = None, raw: bool = False, step_limit: str = None, height: str = None):
+def call(expr: str, param: List[str], value: str = 0, keystore: str = None, raw: bool = False, step_limit: str = None, height: int = None):
     obj = RE_METHOD.match(expr)
     if obj is None:
         raise Exception(f'Invalid parameter param={expr}')
@@ -84,13 +84,13 @@ def call(expr: str, param: List[str], value: str = 0, keystore: str = None, raw:
     addr = ensure_address(obj.group('address'))
 
     svc = service.get_instance()
-    api = svc.get_score_api(addr)
+    api = svc.get_score_api(addr, height=height)
     if api is None:
         raise Exception(f'No API for {addr}')
 
     method = obj.group('method')
     if method is None:
-        print(scoreapi.dumps(api))
+        click.echo(scoreapi.dumps(api))
         return
 
     methods = list(filter(lambda x: x['type'] == 'function' and method == x['name'], api))
@@ -99,14 +99,12 @@ def call(expr: str, param: List[str], value: str = 0, keystore: str = None, raw:
         methods = list(filter(lambda x: x['type'] == 'function' and method in x['name'], api))
         if len(methods) == 0:
             raise Exception(f'No methods found like={method}')
-        print(scoreapi.dumps(methods), file=sys.stderr)
+        click.echo(scoreapi.dumps(methods), file=sys.stderr)
         return
 
     info = methods[0]
     if 'readonly' in info and info['readonly'] == '0x1':
         params = make_params(info['inputs'], param)
-        if height is not None:
-            height = int(height, 0)
         value = svc.call(CallBuilder(to=addr, method=method, params=params, height=height).build())
         if raw:
             dump_json(value)
