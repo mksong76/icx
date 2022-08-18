@@ -86,9 +86,10 @@ def dumps(entries: list, sep: str = '\n') -> str:
 @click.argument('addr')
 @click.option('--raw', '-r', type=bool, is_flag=True)
 @click.option('--filter', '-f', type=str, default=None)
-def get_apis(addr: str, raw: bool = False, filter: str = None):
+@click.option('--height', '-h', type=int, default=None)
+def get_apis(addr: str, raw: bool = False, height: int = None, filter: str = None):
     svc = service.get_instance()
-    api = svc.get_score_api(util.ensure_address(addr))
+    api = svc.get_score_api(util.ensure_address(addr), height=height)
     if filter is not None:
         regex = re.compile(filter)
         new_api = []
@@ -99,4 +100,4 @@ def get_apis(addr: str, raw: bool = False, filter: str = None):
     if raw:
         print(json.dumps(api, indent=2))
     else:
-        print(dumps(api))
+        click.echo(dumps(api))
