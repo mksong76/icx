@@ -307,13 +307,17 @@ def stake_auto(ctx: dict, balance: int = None, noclaim: bool = False):
     remains = timedelta(seconds=remaining_blocks*2)
 
     locale.setlocale(locale.LC_ALL, '')
-    sym, price = upbit.getPrice('ICX')
-    krw = (asset//ICX)*price
-    print(f'[#] Asset={(asset/ICX):.3f} ( x {price:n} = {krw:n} {sym})', file=sys.stderr)
-    print(f'[#] Balance={balance/ICX:.3f} ' +
-          f'Claimable={claimable/ICX:.3f} ' +
-          f'Staked={staked/ICX:.3f} ' +
-          f'Unstaking={unstaking/ICX:.3f} ({remains})',
+    try :
+        sym, price = upbit.getPrice('ICX')
+    except:
+        sym = 'ICX'
+        price = 1
+    krw = (asset*price)//ICX
+    print(f'[#] Asset={format_decimals(asset,3)} ( x {price:n} = {krw:n} {sym})', file=sys.stderr)
+    print(f'[#] Balance={format_decimals(asset,3)} ' +
+          f'Claimable={format_decimals(claimable,3)} ' +
+          f'Staked={format_decimals(staked,3)} ' +
+          f'Unstaking={format_decimals(unstaking,3)} ({remains})',
           file=sys.stderr)
 
 @click.group()
