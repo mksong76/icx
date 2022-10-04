@@ -19,7 +19,8 @@ from ..market import upbit
 from ..util import CHAIN_SCORE, ICX, ensure_address, format_decimals
 from . import wallet
 
-CONFIG_TARGET_BALANCES = "target_balances"
+CONFIG_STAKE_TARGETS = "target_balances"
+CONFIG_SUPPORTING_PREPS = "supporting_preps"
 CONTEXT_ASSET = 'asset'
 
 class AssetService:
@@ -78,7 +79,7 @@ class AssetService:
             target = 0
             change = target-staked
 
-        print(f'[!] Stake ADJUST change={change/ICX:.3f} to={target/ICX:.3f}', file=sys.stderr)
+        print(f'[!] Stake ADJUST {change/ICX:+.3f} to={target/ICX:.3f}', file=sys.stderr)
 
         tx = CallTransactionBuilder(
             nid=1,
@@ -108,30 +109,39 @@ class AssetService:
             }
         ))
 
-    def delegate_all(self, wallet: Wallet, target: int = 0, delegation: dict = None):
+    def delegate_all(self, preps: List[str], wallet: Wallet, target: int = 0, delegation: dict = None):
         if delegation is None:
             delegation = self.get_delegation(wallet.get_address())
 
+        spreps = []
+        for entry in delegation['delegations']:
+            spreps.append(entry['address'])
+        if preps is None or len(preps) == 0:
+            preps = spreps
+        prep_count = len(preps)
+
         voting_power = int(delegation['votingPower'], 0)
         change =  voting_power - target
-        if change == 0:
+        if change == 0 and set(preps) == set(spreps):
             return
-        print(f'[!] Delegate ADJUST change={change/ICX:.3f}', file=sys.stderr)
 
-        total_power = change + int(delegation['totalDelegated'], 0)
-        delegation_count = len(delegation['delegations'])
-        if delegation_count == 0:
-            raise Exception(f'NoCurrentDelegation')
+        print(f'[!] Delegate ADJUST {change/ICX:+.3f}', file=sys.stderr)
+
         new_delegations = []
-        power = (total_power+delegation_count-1)//delegation_count
-        for entry in delegation['delegations']:
-            if total_power < power:
-                power = total_power
-            total_power -= power
-            new_delegations.append({
-                "address": entry["address"],
-                "value": f'0x{power:x}'
-            })
+        total_power = change + int(delegation['totalDelegated'], 0)
+        if total_power > 0:
+            if prep_count == 0:
+                raise Exception(f'NoCurrentDelegation')
+
+            power = (total_power+prep_count-1)//prep_count
+            for entry in preps:
+                if total_power < power:
+                    power = total_power
+                total_power -= power
+                new_delegations.append({
+                    "address": entry,
+                    "value": f'0x{power:x}'
+                })
 
         tx = CallTransactionBuilder(
             nid=1,
@@ -173,19 +183,31 @@ def sum_bond(bond: dict) -> Tuple[int, int, int]:
     votingPower = int(bond['votingPower'], 0)
     return bonded, unbonding, votingPower
 
-def get_target_balance(config: Config, addr: str, balance: int = 0) -> int:
-    balances = config[CONFIG_TARGET_BALANCES]
-    if addr in balances:
-        return balances[addr]
+def get_stake_target(config: Config, addr: str, target: int = 0) -> int:
+    targets = config[CONFIG_STAKE_TARGETS]
+    if addr in targets:
+        return targets[addr]
     else:
-        return balance
+        return target
 
-def set_target_balance(config: Config, addr: str, balance: int):
-    balances = config[CONFIG_TARGET_BALANCES]
-    if addr not in balances or balances[addr] != balance:
-        balances[addr] = balance
-        config[CONFIG_TARGET_BALANCES] = balances
+def set_stake_target(config: Config, addr: str, target: int):
+    targets = config[CONFIG_STAKE_TARGETS]
+    if addr not in targets or targets[addr] != target:
+        targets[addr] = target
+        config[CONFIG_STAKE_TARGETS] = targets
 
+def set_supporting_preps(config: Config, addr: str, preps: List[str]):
+    supporting_preps = config[CONFIG_SUPPORTING_PREPS]
+    if addr not in preps or set(supporting_preps[addr]) != set(preps):
+        supporting_preps[addr] = preps
+        config[CONFIG_SUPPORTING_PREPS] = supporting_preps
+
+def get_supporting_preps(config: Config, addr: str) -> List[str]:
+    preps = config[CONFIG_SUPPORTING_PREPS]
+    if addr in preps:
+        return preps[addr]
+    else:
+        return None
 
 @click.command('show')
 @click.argument('address', nargs=-1)
@@ -252,22 +274,27 @@ def show_asset_of(addr: str):
         print(f'[#] {entry[0]:13s} : {format_decimals(entry[1],3):>16s} ICX {entry[1]*price//ICX:12,} {sym} {entry[2]*100:7.3f}%')
 
 @click.command("auto")
-@click.option("--balance", type=int, help="Minimum balance to maintain", envvar="ICX_ASSET_BALANCE")
+@click.option("--stake", 'target', type=int, help="Amount to stake (negative for asset-X)")
 @click.option("--noclaim", type=bool, is_flag=True)
+@click.option('--preps', '-p', type=str, multiple=True)
 @click.pass_obj
-def stake_auto(ctx: dict, balance: int = None, noclaim: bool = False):
+def stake_auto(ctx: dict, preps: List[str] = None, target: int = None,  noclaim: bool = False):
     service = AssetService()
     config: Config = ctx[CONTEXT_CONFIG]
     wallet: Wallet = ctx[CONTEXT_ASSET]
-    if balance is None:
-        balance = get_target_balance(config, wallet.get_address())
+    if target is None:
+        target = get_stake_target(config, wallet.get_address(), None)
     else:
-        set_target_balance(config, wallet.get_address(), balance)
+        set_stake_target(config, wallet.get_address(), target)
 
-    min_balance = balance*ICX + ICX
-    max_balance = min_balance + ICX
-
-    print(f'[#] Target min={min_balance/ICX:.2f} max={max_balance/ICX:.3f}', file=sys.stderr)
+    if len(preps) > 0:
+        npreps = []
+        for prep in preps:
+            npreps += prep.split(',')
+        preps = npreps
+        set_supporting_preps(config, wallet.get_address(), preps)
+    else:
+        preps = get_supporting_preps(config, wallet.get_address())
 
     iscore = service.query_iscore(wallet.address)
     claimable = int(iscore['estimatedICX'], 0)
@@ -276,27 +303,39 @@ def stake_auto(ctx: dict, balance: int = None, noclaim: bool = False):
         service.claim_iscore(wallet)
         iscore = service.query_iscore(wallet.address)
         claimable = int(iscore['estimatedICX'], 0)
-    #print(json.dumps(iscore, indent=2))
 
     balance = service.get_balance(wallet.address)
     stakes = service.get_stake(wallet.address)
     delegation = service.get_delegation(wallet.address)
     voting_power = int(delegation['votingPower'], 0)
-    _, unstaking, _ = sum_stake(stakes)
+    staked, unstaking, _ = sum_stake(stakes)
+
+    if target is None:
+        min_balance = balance+unstaking
+    elif target >= 0:
+        min_balance = balance+staked+unstaking-target*ICX
+    else:
+        min_balance = -target*ICX
+    if min_balance < ICX:
+        raise Exception(f'Invalid target balance={format_decimals(min_balance,3)} stake={target}')
+    max_balance = min_balance+ICX
+
+    print(f'[#] Stake AUTO target_balance={format_decimals(min_balance,3)} balance={format_decimals(balance,3)} unstaking={format_decimals(unstaking,3)} ', file=sys.stderr)
+
     if balance+unstaking > max_balance:
-        print(f'[-] Staking MORE for {(balance+unstaking-max_balance)/ICX:.3f}', file=sys.stderr)
+        print(f'[-] Staking MORE {(balance+unstaking-max_balance)/ICX:+.3f}', file=sys.stderr)
         service.stake_all(wallet, max_balance, stakes)
-        service.delegate_all(wallet, 0)
+        service.delegate_all(preps, wallet, 0)
     elif balance+unstaking < min_balance:
-        print(f'[-] Staking LESS for {(max_balance-balance-unstaking)/ICX:.3f}',file=sys.stderr)
+        print(f'[-] Staking LESS {(balance+unstaking-max_balance)/ICX:+.3f}', file=sys.stderr)
         if balance+unstaking+voting_power < min_balance:
             voting_power = max_balance-unstaking-balance
-            service.delegate_all(wallet, voting_power)
+            service.delegate_all(preps, wallet, voting_power)
         target_balance = service.get_balance(wallet.address)
         target_balance += voting_power+unstaking
         service.stake_all(wallet, target_balance, stakes)
     else:
-        service.delegate_all(wallet, 0)
+        service.delegate_all(preps, wallet, 0)
 
     delegation = service.get_delegation(wallet.address)
     stakes = service.get_stake(wallet.address)
@@ -314,11 +353,35 @@ def stake_auto(ctx: dict, balance: int = None, noclaim: bool = False):
         price = 1
     krw = (asset*price)//ICX
     print(f'[#] Asset={format_decimals(asset,3)} ( x {price:n} = {krw:n} {sym})', file=sys.stderr)
-    print(f'[#] Balance={format_decimals(asset,3)} ' +
+    print(f'[#] Balance={format_decimals(balance,3)} ' +
           f'Claimable={format_decimals(claimable,3)} ' +
           f'Staked={format_decimals(staked,3)} ' +
           f'Unstaking={format_decimals(unstaking,3)} ({remains})',
           file=sys.stderr)
+
+@click.command('delegation')
+@click.pass_obj
+def show_delegation(ctx: dict):
+    service = AssetService()
+    wallet: Wallet = ctx[CONTEXT_ASSET]
+    delegations = service.get_delegation(wallet.get_address())
+    call = CallBuilder(to=CHAIN_SCORE, method='getPReps').build()
+
+    prep_info = service.service.call(call)
+    prep_map = {}
+    for prep in prep_info['preps']:
+        prep_map[prep['address']] = prep
+
+    print(f'[#] ADDRESS       : {wallet.get_address()}')
+    for entry in delegations['delegations']:
+        address = entry["address"]
+        if address in prep_map:
+            prep = prep_map[address]
+            name = prep["name"]
+        else:
+            name = address
+        value = int(entry["value"], 0)
+        print(f'[#] {name[:20]:20} {address} : {format_decimals(value,3):>16s} ')
 
 @click.group()
 @click.option('--key_store', envvar='ICX_ASSET_KEY_STORE')
@@ -332,3 +395,4 @@ def main(ctx: dict, key_store: str = None):
 
 main.add_command(show_asset)
 main.add_command(stake_auto)
+main.add_command(show_delegation)
