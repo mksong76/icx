@@ -8,10 +8,11 @@ import click
 from iconsdk.builder.call_builder import CallBuilder
 
 from .. import service
-from ..util import CHAIN_SCORE
+from ..util import CHAIN_SCORE, format_decimals
 from . import semanticversion
 from .prep import *
 
+NO_IP='-'
 
 class PRep:
     def __init__(self, prep) -> None:
@@ -67,8 +68,16 @@ def show_status(file: str, version: str, timeout: float):
                 continue
 
         info = prep_info[addr]
-        if 'name' not in info or 'ip' not in info:
-            items.append(PRep(None))
+        if 'ip' not in info:
+            if int(prep['power'], 0) > 0:
+                items.append(PRep({
+                    'name': prep['name'],
+                    'type': GRADE_TO_TYPE[prep['grade']],
+                    'power': int(prep['power'], 0),
+                    'ip': NO_IP,
+                }))
+            else:
+                items.append(PRep(None))
             continue
 
         item = PRep({
@@ -113,15 +122,18 @@ def show_status(file: str, version: str, timeout: float):
     #-------------------------------------------------------------------------------
     #   화면출력
     #
+    click.secho(f' {"NO":3s}| {"Name":18s} {"Grade":6s}| {"IP":15s} | {"Power":>12s} | {"Version":16s} | {"Status":16s}', reverse=True, bold=True)
+    GC='\033[2m'
     GC='\033[2m'
     WC='\033[31;1m'
     IC='\033[32;1m'
     MC='\033[33;1m'
     BC='\033[34;1m'
     NC='\033[0m'
-    STATUS_FORMAT=f'[%3d] %-18s (%4s): %-15s '
-    NOPOWER_FORMAT=f'{GC}[%3d] %-18s (%4s): %-15s{NC} '
-    MAIN_FORMAT=f'{BC}[%3d] %-18s (%4s): %-15s{NC} '
+    STATUS_FORMAT=f'[%3d] %-18s (%4s): %-15s : %12s '
+    NOPOWER_FORMAT=f'{GC}[%3d] %-18s (%4s): %-15s : %12s{NC} '
+    CAND_FORMAT=f'{WC}[%3d] %-18s (%4s): %-15s : %12s{NC} '
+    MAIN_FORMAT=f'{BC}[%3d] %-18s (%4s): %-15s : %12s{NC} '
     LAST_FORMAT='>>>  Late: %d / %d'
     LAST_FOOTER="  <<<"
     idx=0
@@ -136,12 +148,14 @@ def show_status(file: str, version: str, timeout: float):
             idx += 1
             continue
 
-        args = (idx, item.prep['name'][:18], item.prep['type'], item.prep['ip'])
+        args = (idx+1, item.prep['name'][:18], item.prep['type'], item.prep['ip'], format_decimals(item.prep['power'],0))
         has_power = item.prep['power'] > 0
         if item.prep['type'] == 'Main':
             format = MAIN_FORMAT
+        elif item.prep['type'] == 'Cand':
+            format = CAND_FORMAT
         else:
-            if has_power:
+            if has_power and item.prep['ip'] != NO_IP:
                 format = STATUS_FORMAT
             else:
                 format = NOPOWER_FORMAT
@@ -192,4 +206,4 @@ def show_status(file: str, version: str, timeout: float):
         format+='   %s Updated: %d / %d / %d / %d'
         args+=(version_check, updated_in22, updated_main, updated_nodes, all_nodes)
     format+=LAST_FOOTER
-    print(format%args)
+    click.secho(format%args, reverse=True, bold=True)
