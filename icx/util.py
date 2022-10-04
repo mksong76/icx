@@ -101,4 +101,7 @@ def format_decimals(value: Union[str,int], f: int=2) -> str:
         value = int(str(value), 0)
     i_value = value//ICX
     f_value = (value%ICX)*(10**f)//ICX
-    return f'{{:,}}.{{:0{f}d}}'.format(i_value, f_value)
+    if f == 0:
+        return f'{{:,}}'.format(i_value)
+    else:
+        return f'{{:,}}.{{:0{f}d}}'.format(i_value, f_value)
