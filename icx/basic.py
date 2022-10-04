@@ -60,3 +60,13 @@ def get_data(hash: List[str], binary: bool, out: io.RawIOBase):
             out.write(base64.decodestring(data.encode()))
         else:
             util.dump_json(data, fp=io.TextIOWrapper(out))
+
+@click.command(help="Get SCORE status")
+@click.argument("scores", nargs=-1)
+@click.option('--full', is_flag=True)
+@click.option('--height', type=click.INT)
+def get_score(scores: List[str], height: int = None, full: bool = False):
+    svc = service.get_instance()
+    for score in scores:
+        result = svc.get_score_status(score, height=height, full_response=full)
+        util.dump_json(result)
