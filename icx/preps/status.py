@@ -138,13 +138,13 @@ def show_status(file: str, version: str, timeout: float):
 
         args = (idx, item.prep['name'][:18], item.prep['type'], item.prep['ip'])
         has_power = item.prep['power'] > 0
-        if has_power:
-            if item.prep['type'] == 'Main':
-                format = MAIN_FORMAT
-            else:
-                format = STATUS_FORMAT
+        if item.prep['type'] == 'Main':
+            format = MAIN_FORMAT
         else:
-            format = NOPOWER_FORMAT
+            if has_power:
+                format = STATUS_FORMAT
+            else:
+                format = NOPOWER_FORMAT
 
         if item.chain is None:
             format += ': %s'
