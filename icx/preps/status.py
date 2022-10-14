@@ -60,10 +60,11 @@ def show_status(file: str, version: str, timeout: float):
                 items.append(PRep(None))
                 continue
             else:
-                item.append(PRep({
+                items.append(PRep({
                     'name': prep['name'],
                     'type': GRADE_TO_TYPE[prep['grade']],
                     'power': int(prep['power'], 0),
+                    'ip': NO_IP,
                 }))
                 continue
 
