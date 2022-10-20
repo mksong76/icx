@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 
 from typing import Iterable, List, Union
+
 import click
 
 from . import service
+from .cui import Column, RowPrinter
 from .util import *
-
 
 FULL_ADDR_LEN=42
 SHORT_ADDR_LEN=20
@@ -16,7 +17,6 @@ SHORT_VALUE_LEN = 20
 def format_value(s: str) -> str:
     return shorten(format_decimals(s, 2), SHORT_VALUE_LEN, Shorten.LEFT)
 
-
 def dict_get(value: dict, keys: Union[any,list], default = None) -> any:
     if type(keys) is not list:
         keys = [ keys ]
@@ -26,29 +26,6 @@ def dict_get(value: dict, keys: Union[any,list], default = None) -> any:
         else:
             return default
     return value
-
-
-class Column:
-    def __init__(self, get_value, size: int, format: str = None, name: str = '') -> None:
-        self.__get_value = get_value
-        self.__size = size
-        self.__format = format if format is not None else f'{{:{size}}}'
-        self.__name = name
-
-    def get_value(self, *args) -> any:
-        return self.__get_value(*args)
-
-    @property
-    def size(self):
-        return self.__size
-
-    @property
-    def format(self):
-        return self.__format
-
-    @property
-    def name(self):
-        return self.__name
 
 TX_COLUMNS = {
     'id': Column(lambda title, tx: tx['txHash'], 66, name='ID'),
@@ -62,33 +39,6 @@ TX_COLUMNS = {
 }
 TX_HEIGHT_COLUMN = Column(lambda title, tx: title, 8, format='{:>8}', name='Height')
 DEFAULT_COLUMN_NAMES = [ 'id', 'from...', 'type', 'method', 'to', 'value' ]
-
-class RowPrinter:
-    def __init__(self, columns: List[Column], file=sys.stdout) -> None:
-        formats = []
-        seps = []
-        names = []
-        for column in columns:
-            formats.append(column.format)
-            seps.append('-'*column.size)
-            names.append(column.name)
-        self.__columns = columns
-        self.__file = file
-        self.__format_str = '| ' + ' | '.join(formats) + ' |'
-        self.__sep_str = '+-' + '-+-'.join(seps) + '-+'
-        self.__header = self.__format_str.format(*names)
-
-    def print_header(self, **kwargs):
-        click.secho(self.__header, reverse=True, file=self.__file, **kwargs)
-
-    def print_separater(self, **kwargs):
-        click.secho(self.__sep_str, file=self.__file, **kwargs)
-
-    def print_data(self, *args, **kwargs):
-        values = []
-        for column in self.__columns:
-            values.append(column.get_value(*args))
-        click.secho(self.__format_str.format(*values), file=self.__file, **kwargs)
 
 def show_txs(printer: RowPrinter, height: int, txs: list, reverse: bool, **kwargs):
     txs = txs.__reversed__() if reverse else txs

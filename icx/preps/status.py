@@ -123,7 +123,7 @@ def show_status(file: str, version: str, timeout: float):
     #-------------------------------------------------------------------------------
     #   화면출력
     #
-    click.secho(f' {"NO":3s}| {"Name":18s} {"Grade":6s}| {"IP":15s} | {"Power":>12s} | {"Version":16s} | {"Status":16s}', reverse=True, bold=True)
+    click.secho(f' {"NO":3s}| {"Name":18s} {"Grade":6s}| {"IP":15s} | {"Power":>8s} | {"Version":16s} | {"Status":16s}', reverse=True, bold=True)
     GC='\033[2m'
     GC='\033[2m'
     WC='\033[31;1m'
@@ -131,12 +131,10 @@ def show_status(file: str, version: str, timeout: float):
     MC='\033[33;1m'
     BC='\033[34;1m'
     NC='\033[0m'
-    STATUS_FORMAT=f'[%3d] %-18s (%4s): %-15s : %12s '
-    NOPOWER_FORMAT=f'{GC}[%3d] %-18s (%4s): %-15s : %12s{NC} '
-    CAND_FORMAT=f'{WC}[%3d] %-18s (%4s): %-15s : %12s{NC} '
-    MAIN_FORMAT=f'{BC}[%3d] %-18s (%4s): %-15s : %12s{NC} '
-    LAST_FORMAT='>>>  Late: %d / %d'
-    LAST_FOOTER="  <<<"
+    STATUS_FORMAT=f'[%3d] %-18s (%4s): %-15s : %8s '
+    NOPOWER_FORMAT=click.style(STATUS_FORMAT, fg='white', dim=True)
+    CAND_FORMAT=click.style(STATUS_FORMAT, fg='red', bold=True)
+    MAIN_FORMAT=click.style(STATUS_FORMAT, fg='blue', bold=True)
     idx=0
     late_nodes=0
     updated_main=0
@@ -149,7 +147,7 @@ def show_status(file: str, version: str, timeout: float):
             idx += 1
             continue
 
-        args = (idx+1, item.prep['name'][:18], item.prep['type'], item.prep['ip'], format_decimals(item.prep['power'],0))
+        args = (idx+1, item.prep['name'][:18], item.prep['type'], item.prep['ip'], format_decimals(item.prep['power']//10**3,0)+'k')
         has_power = item.prep['power'] > 0
         if item.prep['type'] == 'Main':
             format = MAIN_FORMAT
@@ -197,14 +195,13 @@ def show_status(file: str, version: str, timeout: float):
 
         print(format%args)
         idx += 1
-    format=LAST_FORMAT
+    format='Late: %d / %d'
     args=(late_nodes, all_nodes)
 
     time_next = now + datetime.timedelta(seconds=(next_term-top_height)*2)
-    format+='  NextTerm: %d / %s'
+    format+=' | NextTerm: %d / %s'
     args+=(next_term, str(time_next.strftime('%H:%M:%S')))
     if version_check is not None:
-        format+='   %s Updated: %d / %d / %d / %d'
+        format+=' | %s Updated: %d / %d / %d / %d'
         args+=(version_check, updated_in22, updated_main, updated_nodes, all_nodes)
-    format+=LAST_FOOTER
-    click.secho(format%args, reverse=True, bold=True)
+    click.secho(f' {(format%args):95s} ', reverse=True, bold=True)

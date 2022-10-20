@@ -2,12 +2,12 @@
 
 import base64
 import io
-import re
 from typing import List
 
 import click
 
 from . import service, util
+from .cui import Column, RowPrinter
 
 
 @click.command()
@@ -70,3 +70,34 @@ def get_score(scores: List[str], height: int = None, full: bool = False):
     for score in scores:
         result = svc.get_score_status(score, height=height, full_response=full)
         util.dump_json(result)
+
+@click.command(help="Get SCORE History")
+@click.argument("score", nargs=1)
+def get_codes(score: str):
+    svc = service.get_instance()
+    height = None
+    history = []
+    while True:
+        try:
+            status = svc.get_score_status(score, height=height)
+        except:
+            break
+        if 'current' not in status:
+            break
+        tx_hash = status['current']['auditTxHash']
+        tx = svc.get_transaction(tx_hash)
+        height = tx['blockHeight']
+        history.insert(0, (height, status))
+
+    if len(history) == 0:
+        return
+
+    p = RowPrinter([
+        Column(lambda height, status: height, 10, format='{:>10}', name="Height"),
+        Column(lambda height, status: status['current']['deployTxHash'], 66, name="Deploy TX Hash"),
+        Column(lambda height, status: status['current']['type'], 7, name="Type"),
+        Column(lambda height, status: status['current']['codeHash'], 66, name="Code Hash"),
+    ])
+    p.print_header()
+    for height, status in history:
+        p.print_data(height, status)
