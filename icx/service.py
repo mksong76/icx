@@ -64,7 +64,7 @@ class Service(IconService):
             try :
                 result = self.get_transaction_result(tx_hash=tx_hash)
             except:
-                sleep(1.0)
+                sleep(2.0)
                 continue
 
             if result['status'] != 1:
@@ -74,14 +74,23 @@ class Service(IconService):
         raise FailureAfterSend(tx_hash, f'Timeout(repeat={repeat})')
 
 cached_service = {}
+default_net = None
 def get_instance(url: str = None, nid: int = None) -> Service:
     global cached_service
+    global default_net
 
     if url is None:
-        url = os.getenv('GOLOOP_RPC_URI', MAINNET_URL)
-        nid = int(os.getenv('GOLOOP_RPC_NID', MAINNET_NID), 0)
+        if default_net is not None:
+            url, nid = default_net
+        else:
+            url = os.getenv('GOLOOP_RPC_URI', MAINNET_URL)
+            nid = int(os.getenv('GOLOOP_RPC_NID', MAINNET_NID), 0)
 
     if url not in cached_service:
         service = Service(HTTPProvider(url), nid)
         cached_service[url] = service
     return cached_service[url]
+
+def set_default(url: str = None, nid: int = None):
+    global default_net
+    default_net = (url, str(nid))
