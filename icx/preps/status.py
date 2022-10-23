@@ -3,6 +3,7 @@
 import datetime
 import json
 from concurrent import futures
+import os
 
 import click
 from iconsdk.builder.call_builder import CallBuilder
@@ -27,7 +28,7 @@ def show_status(file: str, version: str, timeout: float):
     #-------------------------------------------------------------------------------
     #   IP정보를 읽어 들인다.
     #
-    fd = open(file, "r")
+    fd = open(os.path.expanduser(file), "r")
     prep_info = json.load(fd)
     fd.close
 

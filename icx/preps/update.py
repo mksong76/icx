@@ -187,4 +187,4 @@ def update_preps_json(server: List[str], output: str):
     if len(server) == 0:
         server = SEED_SERVERS
     preps.update_preps(server)
-    preps.dump(output)
+    preps.dump(os.path.expanduser(output))

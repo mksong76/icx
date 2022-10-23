@@ -9,7 +9,7 @@ GRADE_TO_TYPE = {
     "0x2": "Cand",
 }
 
-PREPS_JSON=".preps.json"
+PREPS_JSON="~/.preps.json"
 
 def icon_getMainPReps() -> any:
     svc = service.get_instance()
