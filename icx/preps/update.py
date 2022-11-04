@@ -6,7 +6,7 @@ import re
 import sys
 import threading
 from os import link
-from typing import  Dict, List
+from typing import  Dict, List, Tuple
 
 import click
 from iconsdk.builder.call_builder import CallBuilder
@@ -14,11 +14,7 @@ from iconsdk.builder.call_builder import CallBuilder
 from . import duration
 from .prep import *
 
-SEED_SERVERS = [ "52.196.159.184" ]
-
-def p2p_to_ip(p2p: str) -> str:
-    ip, port = tuple(p2p.split(':'))
-    return ip
+SEED_SERVERS = [ "52.196.159.184:7100" ]
 
 class PReps:
     def __init__(self, file: str = None):
@@ -26,6 +22,7 @@ class PReps:
             self.preps = {}
         else:
             self.preps = json.load(file)
+        self.cid = None
 
     def preps_get(self, addr: str, add: bool = True) -> Dict:
         if addr not in self.preps:
@@ -37,36 +34,35 @@ class PReps:
             entry = self.preps[addr]
         return entry
 
-    def preps_update_ip(self, current: str, addr: str, ip: str, add: bool = True, type: str = None) -> bool:
+    def preps_update_p2p(self, current: str, addr: str, p2p: str, add: bool = True, type: str = None) -> bool:
         prep = self.preps_get(addr, add)
         if prep is None:
             return False
         if type is not None:
             if 'type' not in prep or type != prep['type']:
-                print(f'[{current}] INSPECT INVALID_TYPE addr={addr} ip={ip}', file=sys.stderr)
-        if 'ip' in prep:
-            if prep['ip'] != ip:
-                print(f"[{current}] CONFLICT {addr} old={prep['ip']} new={ip}", file=sys.stderr)
+                print(f'[{current}] INSPECT INVALID_TYPE addr={addr} p2p={p2p} know={type}', file=sys.stderr)
+        if P2P in prep:
+            if prep[P2P] != p2p:
+                print(f"[{current}] CONFLICT {addr} old={prep[P2P]} new={p2p}", file=sys.stderr)
             return False
         #print(addr, ip, file=sys.stderr)
-        prep['ip'] = ip
+        prep[P2P] = p2p
         return True
 
     def preps_apply_map(self, current: str, addr_map: dict, type: str = None) -> list:
         ips = []
-        for net_addr, key_addr in addr_map.items():
+        for ip, key_addr in addr_map.items():
             if key_addr == "":
                 continue
-            ip = p2p_to_ip(net_addr)
-            if self.preps_update_ip(current, key_addr, ip, True, type):
+            if self.preps_update_p2p(current, key_addr, ip, True, type):
                 ips.append(ip)
         return ips
 
     def preps_apply_list(self, current: str, addr_list: list) -> list:
         ips = []
         for item in addr_list:
-            ip = p2p_to_ip(item['addr'])
-            if self.preps_update_ip(current, item['id'], ip, True):
+            ip = item['addr']
+            if self.preps_update_p2p(current, item['id'], ip, True):
                 ips.append(ip)
         return ips
 
@@ -100,40 +96,50 @@ class PReps:
                 rtt = duration.time_to_ms(m.group('avg'))
         self.preps_add_link(name, addr, conn['id'], rtt)
 
-    def analyze_server(self, server):
-        print(f"INSPECTING {server}", file=sys.stderr)
+    def analyze_server(self, server, src):
+        rpc = p2p_to_rpc(server)
+        print(f"INSPECTING {rpc}", file=sys.stderr)
         try:
-            info = node_inspect(server)
+            info = node_inspect(rpc)
         except:
             return
+
+        if self.cid is None:
+            self.cid = info['cid']
+            print(f'[{server}] SET NETWORK cid={info["cid"]}')
+        else:
+            if self.cid != info['cid']:
+                print(f'[{server}] DIFFERENT NETWORK cid={info["cid"]} from={src}')
+                return
 
         p2p = info["module"]["network"]["p2p"]
         addr = p2p['self']['id']
 
-        self.preps_update_ip(server, addr, p2p_to_ip(p2p['self']['addr']), True)
+        self.preps_update_p2p(server, addr, p2p['self']['addr'], True)
         prep = self.preps_get(addr)
+        prep[RPC] = rpc
 
         if 'roots' in p2p:
             founds = self.preps_apply_map(server, p2p['roots'], 'Main')
             for ip in founds:
-                self.inspect_server(ip)
+                self.inspect_server(ip, f'{server}:roots')
         if 'seeds' in p2p:
             founds = self.preps_apply_map(server, p2p['seeds'])
             for ip in founds:
-                self.inspect_server(ip)
+                self.inspect_server(ip, f'{server}:seeds')
 
         for name in ['friends', 'uncles', 'children', 'nephews']:
             if name in p2p:
                 founds = self.preps_apply_list(server, p2p[name])
                 for ip in founds:
-                    self.inspect_server(ip)
+                    self.inspect_server(ip, f'{server}:{name}')
                 for conn in p2p[name]:
                     self.preps_add_conn('links', addr, conn)
 
-        for name in ['orphanages']:
-            if name in p2p:
-                for conn in p2p[name]:
-                    self.preps_add_conn('orphanages', addr, conn)
+        # for name in ['orphanages']:
+        #     if name in p2p:
+        #         for conn in p2p[name]:
+        #             self.preps_add_conn('orphanages', addr, conn)
 
         if 'parent' in p2p:
             parent = p2p['parent']
@@ -141,7 +147,10 @@ class PReps:
                 self.preps_add_conn('links', addr, parent)
 
     def update_preps(self, seed: List[str]):
-        main_prep_info = icon_getPReps()
+        if len(seed) == 0:
+            raise Exception("No seed information")
+        server = p2p_to_rpc(seed[0])
+        main_prep_info = icon_getPReps(server)
         idx = 0
         for prep in main_prep_info['preps']:
             if 'nodeAddress' in prep:
@@ -164,14 +173,14 @@ class PReps:
 
         self.threads: List[threading.Thread]=[]
         for server in seed:
-            self.inspect_server(server)
+            self.inspect_server(server, 'seed')
 
         while len(self.threads)>0:
             th = self.threads.pop(0)
             th.join()
 
-    def inspect_server(self, ip:str):
-        th = threading.Thread(target=self.analyze_server, args=[ip])
+    def inspect_server(self, ip:str, src:str):
+        th = threading.Thread(target=self.analyze_server, args=[ip, src])
         self.threads.append(th)
         th.start()
 
@@ -181,10 +190,10 @@ class PReps:
 
 @click.command('update')
 @click.argument('server', nargs=-1)
-@click.option('--output', type=str, default=PREPS_JSON)
-def update_preps_json(server: List[str], output: str):
+@click.option('--store', type=str, default=PREPS_JSON)
+def update_preps_json(server: List[str], store: str):
     preps = PReps()
     if len(server) == 0:
         server = SEED_SERVERS
     preps.update_preps(server)
-    preps.dump(os.path.expanduser(output))
+    preps.dump(os.path.expanduser(store))

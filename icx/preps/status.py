@@ -21,28 +21,38 @@ class PRep:
         self.futures = []
 
 @click.command('status')
-@click.option('--file', type=str, default=PREPS_JSON)
+@click.option('--store', type=str, default=PREPS_JSON)
 @click.option('--version', type=str)
 @click.option("--timeout", type=click.FLOAT, default=1.5)
-def show_status(file: str, version: str, timeout: float):
+def show_status(store: str, version: str, timeout: float):
     #-------------------------------------------------------------------------------
     #   IP정보를 읽어 들인다.
     #
-    fd = open(os.path.expanduser(file), "r")
-    prep_info = json.load(fd)
+    fd = open(os.path.expanduser(store), "r")
+    prep_info: dict = json.load(fd)
     fd.close
+
+    #-------------------------------------------------------------------------------
+    #   기록된 첫번째 서버의 RPC포트를 이용한다.
+    rpc = None
+    uri = None
+    for prep in prep_info.values():
+        if RPC in prep:
+            rpc = prep[RPC]
+            uri = f'http://{rpc}/api/v3'
+            break
 
     #-------------------------------------------------------------------------------
     #   현재 Term정보
     #
-    svc = service.get_instance()
+    svc = service.get_instance(uri)
     iiss_info = svc.call(CallBuilder(to=CHAIN_SCORE, method="getIISSInfo").build())
     next_term = int(iiss_info['nextPRepTerm'], 0)
 
     #-------------------------------------------------------------------------------
     #   현재의 prep정보(등급)을 가지고 있습니다.
     #
-    preps = icon_getPReps()['preps']
+    preps = icon_getPReps(rpc)['preps']
 
     #-------------------------------------------------------------------------------
     #   getChain 과 getVersion을 모든 PREP들에게 호출한다.
@@ -70,7 +80,7 @@ def show_status(file: str, version: str, timeout: float):
                 continue
 
         info = prep_info[addr]
-        if 'ip' not in info:
+        if P2P not in info:
             if int(prep['power'], 0) > 0:
                 items.append(PRep({
                     'name': prep['name'],
@@ -84,16 +94,20 @@ def show_status(file: str, version: str, timeout: float):
 
         item = PRep({
             'name': prep['name'],
-            'ip': info['ip'],
             'type': GRADE_TO_TYPE[prep['grade']],
             'power': int(prep['power'], 0),
+            'ip': server_to_ip(info[P2P]),
         })
-        future = executor.submit(node_get_chain, info['ip'], timeout=timeout)
-        results.append(future)
-        item.futures.append(future)
-        future = executor.submit(node_get_version, info['ip'], timeout=timeout)
-        results.append(future)
-        item.futures.append(future)
+        if RPC in info:
+            server = info[RPC]
+            future = executor.submit(node_get_chain, server, timeout=timeout)
+            results.append(future)
+            item.futures.append(future)
+            future = executor.submit(node_get_version, server, timeout=timeout)
+            results.append(future)
+            item.futures.append(future)
+        else:
+            pass
         items.append(item)
     futures.as_completed(results)
 
