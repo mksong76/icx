@@ -17,7 +17,7 @@ CONFIG_NETWORKS='networks'
 
 @click.group()
 @click.option('--config', envvar='ICX_CONFIG')
-@click.option('--net', '-n', type=click.STRING, envvar='ICX_RPC_NETWORK')
+@click.option('--net', '-n', type=click.STRING, envvar='ICX_NET')
 @click.option('--url', type=click.STRING, envvar='ICX_RPC_URL')
 @click.option('--nid', type=click.STRING, envvar='ICX_RPC_NID')
 @click.pass_context
