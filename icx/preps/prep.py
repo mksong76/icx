@@ -9,6 +9,7 @@ GRADE_TO_TYPE = {
     "0x2": "Cand",
 }
 
+PREP_STORE='prep.store'
 PREPS_JSON="~/.preps.json"
 P2P="p2p"
 RPC="rpc"

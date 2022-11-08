@@ -22,11 +22,10 @@ CONFIG_NETWORKS='networks'
 @click.option('--nid', type=click.STRING, envvar='ICX_RPC_NID')
 @click.pass_context
 def main(ctx: click.Context, net: str = None, url: str = None, nid: str = None, config: str = None):
+    ctx.ensure_object(dict)
     config = path.join(click.get_app_dir('ICX'), 'config.json') if config is None else config
     ctx_config = Config(config)
-    ctx.obj = {
-        CONTEXT_CONFIG: ctx_config,
-    }
+    ctx.obj[CONTEXT_CONFIG] = ctx_config
     networks = ctx_config.get(CONFIG_NETWORKS)
     if url is not None and nid is not None:
         service.set_default(url, int(nid, 0))

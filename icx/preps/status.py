@@ -21,10 +21,11 @@ class PRep:
         self.futures = []
 
 @click.command('status')
-@click.option('--store', type=str, default=PREPS_JSON)
+@click.pass_obj
 @click.option('--version', type=str)
 @click.option("--timeout", type=click.FLOAT, default=1.5)
-def show_status(store: str, version: str, timeout: float):
+def show_status(obj: dict, version: str, timeout: float):
+    store = obj[PREP_STORE]
     #-------------------------------------------------------------------------------
     #   IP정보를 읽어 들인다.
     #

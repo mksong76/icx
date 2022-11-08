@@ -189,9 +189,10 @@ class PReps:
             print(json.dumps(self.preps, indent=2), file=fd)
 
 @click.command('update')
+@click.pass_obj
 @click.argument('server', nargs=-1)
-@click.option('--store', type=str, default=PREPS_JSON)
-def update_preps_json(server: List[str], store: str):
+def update_preps_json(obj: dict, server: List[str], store: str):
+    store = obj[PREP_STORE]
     preps = PReps()
     if len(server) == 0:
         server = SEED_SERVERS
