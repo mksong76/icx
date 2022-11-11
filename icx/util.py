@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+from datetime import datetime, timedelta, timezone
 import json
 import sys
 from enum import Enum
@@ -105,3 +106,12 @@ def format_decimals(value: Union[str,int], f: int=2) -> str:
         return f'{{:,}}'.format(i_value)
     else:
         return f'{{:,}}.{{:0{f}d}}'.format(i_value, f_value)
+
+UTC = timezone(timedelta(hours=0), name='UTC')
+def datetime_from_ts(tv: Union[str, int]) -> datetime:
+    if type(tv) is str:
+        tv = int(tv, 0)
+    return datetime.utcfromtimestamp(tv/10**6).replace(tzinfo=UTC)
+
+def format_dt(dt: datetime) -> str:
+    return dt.strftime('%Y-%m-%d %H:%M:%S:%f %Z')

@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 
-from os import path
 import sys
+from datetime import datetime, timedelta, timezone
+from os import path
+from typing import List
 
 import click
-from icx.cui import Column, RowPrinter
 
-from icx.util import dump_json
+from icx.cui import Column, RowPrinter
+from icx.util import datetime_from_ts, dump_json, format_dt
 
 from . import (basic, blockinterval, call, preps, rlp, scoreapi, service,
                trace, txscan)
@@ -83,6 +85,26 @@ def network(obj: dict, name: str = None, url: str = None, nid: str = None, delet
 
     click.echo(f'Network {name} is set as URL={url} NID=0x{nid:x}')
 
+@click.command('time')
+@click.argument('timestamp', type=click.STRING, nargs=-1)
+@click.option('--utc', is_flag=True, default=False)
+def time_convert(timestamp: List[str], utc: bool = False):
+    dt_old = None
+    for value in timestamp:
+        dt = datetime_from_ts(value)
+        if not utc:
+            dt = dt.astimezone()
+        if dt_old is None:
+            print(format_dt(dt))
+        else:
+            dt_diff = dt-dt_old
+            if dt_diff < timedelta(0):
+                print(format_dt(dt), f'( -{-dt_diff} )')
+            else:
+                print(format_dt(dt), f'( +{dt_diff} )')
+        dt_old = dt
+
+
 main.add_command(scoreapi.get_apis, 'apis')
 main.add_command(basic.get_balance, 'balance')
 main.add_command(basic.get_block, 'block')
@@ -99,6 +121,7 @@ main.add_command(call.call, 'call')
 main.add_command(preps.main, 'prep')
 main.add_command(asset.main, 'asset')
 main.add_command(network, 'net')
+main.add_command(time_convert, 'time')
 
 if __name__ == '__main__':
     main()
