@@ -6,7 +6,7 @@ from . import status, update
 from .prep import PREP_STORE, PREPS_JSON
 
 @click.group()
-@click.option('--store', type=click.STRING, default=PREPS_JSON, envvar='ICX_PREP_STORE')
+@click.option('--store', type=click.STRING, default=PREPS_JSON, envvar='ICX_PREP_STORE', help='File to store PRep information')
 @click.pass_context
 def main(ctx: click.Context, store: str):
     ctx.ensure_object(dict)

@@ -192,6 +192,14 @@ class PReps:
 @click.pass_obj
 @click.argument('server', nargs=-1)
 def update_preps_json(obj: dict, server: List[str], store: str):
+    '''
+    Update connected P2P server information from SERVER
+
+    SERVER is <ip>:<port> to the P2P endpoint of the node
+    It tries to use RPC endpoint <ip>:<port+1900> for inspection
+
+    For example, use "http://myhost:9000/api/v3" for "myhost:7100"
+    '''
     store = obj[PREP_STORE]
     preps = PReps()
     if len(server) == 0:
