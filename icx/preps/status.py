@@ -150,6 +150,7 @@ def show_status(obj: dict, version: str, timeout: float):
     STATUS_FORMAT=f'[%3d] %-18s (%4s): %-15s : %8s '
     NOPOWER_FORMAT=click.style(STATUS_FORMAT, fg='white', dim=True)
     CAND_FORMAT=click.style(STATUS_FORMAT, fg='red', bold=True)
+    POWER_NOIP_FORMAT=click.style(STATUS_FORMAT, fg='red')
     MAIN_FORMAT=click.style(STATUS_FORMAT, fg='blue', bold=True)
     idx=0
     late_nodes=0
@@ -170,8 +171,11 @@ def show_status(obj: dict, version: str, timeout: float):
         elif item.prep['type'] == 'Cand':
             format = CAND_FORMAT
         else:
-            if has_power and item.prep['ip'] != NO_IP:
-                format = STATUS_FORMAT
+            if has_power:
+                if item.prep['ip'] == NO_IP:
+                    format = POWER_NOIP_FORMAT
+                else:
+                    format = STATUS_FORMAT
             else:
                 format = NOPOWER_FORMAT
 
