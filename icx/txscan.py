@@ -76,7 +76,8 @@ TC_CLEAR = '\033[K'
 @click.option('--address', '-a', 'addresses', default=None, multiple=True)
 @click.option('--method', '-m', 'methods', default=None, multiple=True)
 @click.option('--data_type', '-t', 'data_types', default=None, multiple=True)
-def scan(columns: List[str], block, forward, nobase, receivers, senders, addresses, methods, data_types):
+@click.option('--version', type=click.INT, default=None)
+def scan(columns: List[str], block, forward, nobase, receivers, senders, addresses, methods, data_types, version: int = None):
     """Scanning transactions
 
     COLUMNS is list of columns to display. Some of following values
@@ -106,6 +107,8 @@ def scan(columns: List[str], block, forward, nobase, receivers, senders, address
     if len(data_types) > 0:
         data_types = expand_comma(data_types)
         tx_filters.append(lambda tx: dict_get(tx, 'dataType', 'transfer') in data_types)
+    if version is not None:
+        tx_filters.append(lambda tx: dict_get(tx, 'version', 2) == version)
     tx_filter = merge_filters(tx_filters)
 
     if len(columns) == 0:
