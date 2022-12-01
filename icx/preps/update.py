@@ -191,7 +191,7 @@ class PReps:
 @click.command('update')
 @click.pass_obj
 @click.argument('server', nargs=-1)
-def update_preps_json(obj: dict, server: List[str], store: str):
+def update_preps_json(obj: dict, server: List[str]):
     '''
     Update connected P2P server information from SERVER
 
@@ -200,9 +200,12 @@ def update_preps_json(obj: dict, server: List[str], store: str):
 
     For example, use "http://myhost:9000/api/v3" for "myhost:7100"
     '''
-    store = obj[PREP_STORE]
+    store = obj[CONTEXT_PREP_STORE]
     preps = PReps()
     if len(server) == 0:
-        server = SEED_SERVERS
+        if CONTEXT_PREP_SEEDS in obj:
+            server = obj[CONTEXT_PREP_SEEDS]
+        else:
+            server = SEED_SERVERS
     preps.update_preps(server)
     preps.dump(os.path.expanduser(store))

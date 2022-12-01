@@ -25,7 +25,10 @@ class PRep:
 @click.option('--version', type=str)
 @click.option("--timeout", type=click.FLOAT, default=1.5)
 def show_status(obj: dict, version: str, timeout: float):
-    store = obj[PREP_STORE]
+    '''
+    Show status of connected servers from SEED servers
+    '''
+    store = obj[CONTEXT_PREP_STORE]
     #-------------------------------------------------------------------------------
     #   IP정보를 읽어 들인다.
     #
