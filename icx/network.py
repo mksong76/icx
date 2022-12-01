@@ -7,12 +7,15 @@ from .config import CONTEXT_CONFIG, Config
 from .cui import Column, RowPrinter
 
 CONFIG_NETWORKS='networks'
+CONTEXT_NETWORK='network.name'
 
-def handleFlag(ctx_config: Config, net: str):
-    networks = ctx_config.get(CONFIG_NETWORKS)
+def handleFlag(obj: dict, net: str):
+    config = obj[CONTEXT_CONFIG]
+    networks = config.get(CONFIG_NETWORKS)
     if net not in networks:
         click.echo(f'Available networks:{",".join(networks.keys())}', file=sys.stderr)
         raise Exception(f'Unknown network name={net}')
+    obj[CONTEXT_NETWORK] = net
     service.set_default(*networks[net])
 
 @click.command('net', help='Show network information without name, delete network information without URL and NID. Otherwise set network information')

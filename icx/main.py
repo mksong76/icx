@@ -29,11 +29,10 @@ def main(ctx: click.Context, net: str = None, url: str = None, nid: str = None, 
     config = path.join(click.get_app_dir('ICX'), 'config.json') if config is None else config
     ctx_config = Config(config)
     ctx.obj[CONTEXT_CONFIG] = ctx_config
-    networks = ctx_config.get(CONFIG_NETWORKS)
     if url is not None and nid is not None:
         service.set_default(url, int(nid, 0))
     elif net is not None:
-        network.handleFlag(ctx_config, net)
+        network.handleFlag(ctx.obj, net)
     if ks is not None:
         wallet.handleFlag(ctx_config, ks)
 
