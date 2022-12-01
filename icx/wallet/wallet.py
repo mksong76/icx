@@ -121,34 +121,35 @@ def main(obj: dict, name: str = None, file: str = None, delete: bool = None, ver
         return
 
     if file is None:
-        if name in keystores:
-            if delete:
-                del keystores[name]
-                config[CONFIG_KEYSTORES] = keystores
+        if not name in keystores:
+            click.secho(f'No keystore named [{name}]', color='red', file=sys.stderr)
+            return
+        if delete:
+            del keystores[name]
+            config[CONFIG_KEYSTORES] = keystores
+            click.echo(f'Keystore [{name}] is deleted')
+            return
+        elif verify:
+            password = click.prompt("WalletPassword", hide_input=True)
+            try:
+                load_wallet_from_dict(keystores[name], password)
+            except:
+                click.secho(f'Fail to verify keystore', color='red', file=sys.stderr)
+            click.echo(f'Keystore [{name}] is verified')
+            return
+        elif rename is not None:
+            if rename in keystores:
+                click.secho(f'There is already existing keystore [{rename}]', color='red', file=sys.stderr)
                 return
-            elif verify:
-                password = click.prompt("WalletPassword", hide_input=True)
-                try:
-                    load_wallet_from_dict(keystores[name], password)
-                except:
-                    click.secho(f'Fail to verify keystore', color='red', file=sys.stderr)
-                return
-            elif rename is not None:
-                if rename in keystores:
-                    click.secho(f'Already existing name={rename}', color='red', file=sys.stderr)
-                    return
-                ks = keystores[name]
-                del keystores[name]
-                keystores[rename] = ks
-                config[CONFIG_KEYSTORES] = keystores
-                click.echo(f'Keystore {name} is renamed to {rename}')
-                return
-            else:
-                json.dump(keystores[name], sys.stdout)
-                return
+            ks = keystores[name]
+            del keystores[name]
+            keystores[rename] = ks
+            config[CONFIG_KEYSTORES] = keystores
+            click.echo(f'Keystore [{name}] is renamed to [{rename}]')
+            return
         else:
-            click.secho(f'No keystore named {name}', color='red', file=sys.stderr)
-        return
+            json.dump(keystores[name], sys.stdout)
+            return
 
     if verify:
         password = click.prompt("WalletPassword", hide_input=True)
