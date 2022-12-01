@@ -34,7 +34,7 @@ def main(ctx: click.Context, net: str = None, url: str = None, nid: str = None, 
     elif net is not None:
         network.handleFlag(ctx.obj, net)
     if ks is not None:
-        wallet.handleFlag(ctx_config, ks)
+        wallet.handleFlag(ctx.obj, ks)
 
 @click.command('time')
 @click.argument('timestamp', type=click.STRING, nargs=-1)

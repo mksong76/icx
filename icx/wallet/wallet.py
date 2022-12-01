@@ -14,6 +14,7 @@ from icx.config import CONTEXT_CONFIG, Config
 from icx.cui import Column, RowPrinter
 
 CONFIG_KEYSTORES='wallets'
+CONTEXT_KEYSTORE='keystore.name'
 
 def load_wallet_from_dict(src: dict, pw: str) -> Wallet:
     fd = io.BytesIO(bytes(json.dumps(src), 'utf-8'))
@@ -78,13 +79,15 @@ def get_instance(ks: str = None, kp: str = None) -> MyWallet:
         cached_wallet[ks] = wallet
     return cached_wallet[ks]
 
-def handleFlag(config: Config, name: str):
+def handleFlag(obj: dict, name: str):
     global default_wallet
+    config = obj[CONTEXT_CONFIG]
     keystores = config.get(CONFIG_KEYSTORES)
     if name not in keystores:
         click.echo(f'Available networks:{",".join(keystores.keys())}', file=sys.stderr)
         raise Exception(f'Unknown keystore name={name}')
     default_wallet = MyWallet(keystores[name])
+    obj[CONTEXT_KEYSTORE] = name
 
 def print_keystores(keystores: dict):
     if len(keystores) == 0:
