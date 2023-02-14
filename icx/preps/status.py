@@ -171,7 +171,7 @@ def show_status(obj: dict, version: str, timeout: float):
         has_power = item.prep['power'] > 0
         if item.prep['type'] == 'Main':
             format = MAIN_FORMAT
-        elif item.prep['type'] == 'Cand':
+        elif item.prep['type'] == 'Cand' and has_power and idx < 100:
             format = CAND_FORMAT
         else:
             if has_power:
