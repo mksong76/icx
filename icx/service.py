@@ -93,4 +93,4 @@ def get_instance(url: str = None, nid: int = None) -> Service:
 
 def set_default(url: str = None, nid: int = None):
     global default_net
-    default_net = (url, str(nid))
+    default_net = (url, nid)
