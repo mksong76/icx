@@ -186,7 +186,7 @@ def get_prep(obj: dict, key: str, raw: bool, height: str):
 
         for idx in range(len(preps)):
             if preps[idx]['address'] == prep_addr:
-                prep_index = idx+1
+                prep_index = idx
     else:
         while prep_index >= len(preps):
             preps += icon_getPReps(rpc, len(preps), height=height)['preps']
