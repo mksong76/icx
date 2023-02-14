@@ -31,12 +31,15 @@ class MovingAverage:
 INTERVAL_WINDOW = 30
 INTERVAL_THREADS = 6
 
-@click.command(help='Check intervals of "count" blocks from "start" height')
+@click.command()
 @click.argument('start', type=click.INT)
 @click.argument('count', type=click.INT)
 @click.option('--guide', help="Block interval configuration in milli-second", type=click.INT, default=1000)
 @click.option('--threads', '-t', type=click.INT, default=INTERVAL_THREADS)
 def block_interval(start: int, count: int, guide: int, threads: int):
+    '''
+    Check intervals of "count" blocks from "start" height
+    '''
     svc = service.get_instance()
 
     guide_ms = guide*1000

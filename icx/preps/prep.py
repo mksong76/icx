@@ -161,6 +161,9 @@ def find_rpc(prep_info:dict) -> Union[str,None]:
 @click.option('--raw', is_flag=True)
 @click.option('--height', type=str, default=None)
 def get_prep(obj: dict, key: str, raw: bool, height: str):
+    '''
+    Get PRep information
+    '''
     prep_info = load_prep_store(obj[CONTEXT_PREP_STORE])
     rpc = find_rpc(prep_info)
     preps = icon_getPReps(rpc, height=height)['preps']

@@ -6,7 +6,7 @@ import click
 from . import status, update, prep
 from ..network import CONTEXT_NETWORK
 
-@click.group()
+@click.group('prep', help='ICON PRep related operations')
 @click.option('--store', type=click.STRING, default=None, envvar='ICX_PREP_STORE', help='File to store PRep information')
 @click.pass_context
 def main(ctx: click.Context, store: str = None):

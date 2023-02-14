@@ -40,6 +40,9 @@ def main(ctx: click.Context, net: str = None, url: str = None, nid: str = None, 
 @click.argument('timestamp', type=click.STRING, nargs=-1)
 @click.option('--utc', is_flag=True, default=False)
 def time_convert(timestamp: List[str], utc: bool = False):
+    '''
+    Convert microsecond to datetime
+    '''
     dt_old = None
     for value in timestamp:
         dt = datetime_from_ts(value)

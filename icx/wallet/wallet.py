@@ -113,6 +113,9 @@ def print_keystores(keystores: dict):
 @click.option('--rename', '-r', type=click.STRING, default=None)
 @click.pass_obj
 def main(obj: dict, name: str = None, file: str = None, delete: bool = None, verify: bool = None, rename: str = None):
+    '''
+    Manage keystores
+    '''
     config: Config = obj[CONTEXT_CONFIG]
     keystores: dict = config.get(CONFIG_KEYSTORES)
 

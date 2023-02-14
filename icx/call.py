@@ -77,6 +77,9 @@ def parse_output(outputs: list, output: any) -> any:
 @click.option('--height', '-h', type=int, default=None, help="Block height for query")
 @click.option('--raw', '-r', is_flag=True)
 def call(expr: str, param: List[str], value: str = 0, keystore: str = None, raw: bool = False, step_limit: str = None, height: int = None):
+    '''
+    Call method of the contract
+    '''
     obj = RE_METHOD.match(expr)
     if obj is None:
         raise Exception(f'Invalid parameter param={expr}')

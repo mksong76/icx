@@ -15,6 +15,7 @@ from .cui import Column, RowPrinter
 @click.option('--full', type=click.BOOL, is_flag=True)
 @click.option('--height', type=click.INT)
 def get_balance(addr: str, full: bool = False, height: int = None):
+    '''Get balance of the account'''
     svc = service.get_instance()
     print(svc.get_balance(util.ensure_address(addr), height=height, full_response=full))
 
@@ -23,6 +24,7 @@ def get_balance(addr: str, full: bool = False, height: int = None):
 @click.argument('ids', nargs=-1)
 @click.option('--full', is_flag=True)
 def get_block(ids: List[str], full: bool = False):
+    '''Get the block information'''
     svc = service.get_instance()
     if len(ids) == 0:
         ids = [ 'latest']
@@ -34,6 +36,7 @@ def get_block(ids: List[str], full: bool = False):
 @click.argument('ids', nargs=-1)
 @click.option('--full', is_flag=True)
 def get_tx(ids: List[str], full: bool = False):
+    '''Get the transaction information'''
     svc = service.get_instance()
     for id in ids:
         tx = svc.get_transaction(id, full_response=full)
@@ -43,6 +46,7 @@ def get_tx(ids: List[str], full: bool = False):
 @click.argument('ids', nargs=-1)
 @click.option('--full', is_flag=True)
 def get_result(ids: List[str], full: bool = False):
+    '''Get the transaction result'''
     svc = service.get_instance()
     for id in ids:
         result = svc.get_transaction_result(id, full_response=full)

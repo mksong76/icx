@@ -387,6 +387,9 @@ def show_delegation(ctx: dict):
 @click.option('--key_store', envvar='ICX_ASSET_KEY_STORE')
 @click.pass_obj
 def main(ctx: dict, key_store: str = None):
+    '''
+    Manage ICON assets (stake/delegation/claim...)
+    '''
     if key_store is not None:
         ctx[CONTEXT_ASSET] = wallet.get_instance(key_store)
     else:

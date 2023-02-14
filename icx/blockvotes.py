@@ -32,6 +32,9 @@ class VOTEITEM:
 @click.command('vote')
 @click.argument('height', type=util.HEX_INT)
 def check_votes(height: int):
+    '''
+    Check votes of the block and show vote information
+    '''
     svc = service.get_instance()
 
     hdr_b64 = svc.get_block_header_by_height(height)

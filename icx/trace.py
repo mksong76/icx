@@ -31,7 +31,7 @@ class ColorPicker:
                 return color
 
 
-@click.command()
+@click.command(help='Get the trace of the transaction')
 @click.argument('txhash')
 @click.option('--raw', is_flag=True)
 def get_trace(txhash: str, raw: bool):
