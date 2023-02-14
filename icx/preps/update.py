@@ -163,6 +163,7 @@ class PReps:
             entry["name"] = prep["name"]
             entry['country'] = prep['country']
             entry['power'] = int(prep['power'], 0)
+            entry['address'] = prep['address']
             if idx < 22:
                 entry['grade'] = 'Main'
             elif idx < 100:
