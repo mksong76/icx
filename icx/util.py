@@ -6,6 +6,7 @@ import sys
 from enum import Enum
 from time import sleep
 from typing import Any, Union
+import click
 
 import requests
 
@@ -115,3 +116,15 @@ def datetime_from_ts(tv: Union[str, int]) -> datetime:
 
 def format_dt(dt: datetime) -> str:
     return dt.strftime('%Y-%m-%d %H:%M:%S:%f %Z')
+
+class HexIntegerType(click.ParamType):
+    name = "hexint"
+    def convert(self, value, param, ctx) -> int:
+        if isinstance(value, int):
+            return value
+        try:
+            return int(value, 0)
+        except ValueError:
+            self.fail(f'{value} is not a valid integer', param, ctx)
+
+HEX_INT = HexIntegerType()
