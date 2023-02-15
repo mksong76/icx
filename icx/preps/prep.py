@@ -26,6 +26,21 @@ STATE_TO_STR = {
     "0x3": "Failure",
 }
 
+STATUS_TO_STR = {
+    "0x0": "Active",
+    "0x1": "Unregistered",
+    "0x2": "Disqualified",
+    "0x3": "NotReady",
+}
+
+PENALTY_TO_STR = {
+    "0x0": "None",
+    "0x1": "Disqualified",
+    "0x2": "LowProductivity",
+    "0x3": "BlockValidation",
+    "0x4": "NonVote",
+}
+
 PREPS_JSON="~/.preps.{network}.json"
 P2P="p2p"
 RPC="rpc"
@@ -213,8 +228,8 @@ def get_prep(obj: dict, key: str, raw: bool, height: str):
             Row(lambda obj: GRADE_TO_TYPE[obj.get('grade')], 4, '{}', 'Grade'),
             Row(lambda obj: obj.get('nodeAddress'), 42, '{}', 'Node'),
             Row(lambda obj: obj.get('p2pEndpoint'), 40, '{}', 'P2P'),
-            Row(lambda obj: obj.get('penalty'), 3, '{}', 'Penalty'),
-            Row(lambda obj: obj.get('status'), 3, '{}', 'Status'),
+            Row(lambda obj: PENALTY_TO_STR[obj.get('penalty')], 20, '{}', 'Penalty'),
+            Row(lambda obj: STATUS_TO_STR[obj.get('status')], 20, '{}', 'Status'),
             Row(lambda obj: util.format_decimals(obj.get('irep')), 40, '{:>40}', 'iRep'),
             Row(lambda obj: int(obj.get('irepUpdateBlockHeight'),0), 40, '{:>40,}', 'iRep-Height'),
             Row(lambda obj: util.format_decimals(obj.get('bonded')), 40, '{:>40}', 'Bonded'),
