@@ -171,6 +171,7 @@ def show_status(obj: dict, version: str, timeout: float):
         has_power = item.prep['power'] > 0
         if item.prep['type'] == 'Main':
             format = MAIN_FORMAT
+            main_nodes += 1
         elif item.prep['type'] == 'Cand' and has_power and idx < 100:
             format = CAND_FORMAT
         else:
@@ -193,15 +194,12 @@ def show_status(obj: dict, version: str, timeout: float):
             elif semanticversion.is_lower_version(item.version, version_check):
                 format += f': {WC}%-16s{NC} '
                 args += (item.version,)
-                if item.prep['type'] == 'Main':
-                    main_nodes += 1
             else:
                 format += f': {IC}%-16s{NC} '
                 args += ('[OK]',)
                 updated_nodes+=1
                 if item.prep['type'] == 'Main':
                     updated_main += 1
-                    main_nodes += 1
                 if idx < 22:
                     updated_in22 += 1
 
@@ -225,6 +223,6 @@ def show_status(obj: dict, version: str, timeout: float):
     format+=' | NextTerm: %d / %s'
     args+=(next_term, str(time_next.strftime('%H:%M:%S')))
     if version_check is not None:
-        format+=' | %s Updated: %d / %d / %d / %d'
-        args+=(version_check, updated_in22, updated_main, updated_nodes, all_nodes)
+        format+=' | %s Updated: %d(22) / %d(%d) / %d(%d)'
+        args+=(version_check, updated_in22, updated_main, main_nodes, updated_nodes, all_nodes)
     click.secho(f' {(format%args):95s} ', reverse=True, bold=True)
