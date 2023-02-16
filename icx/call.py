@@ -13,7 +13,7 @@ from iconsdk.builder.transaction_builder import CallTransactionBuilder
 from iconsdk.icon_service import  SignedTransaction
 
 from . import scoreapi, service, wallet
-from .util import ensure_address, dump_json, ensure_score
+from .util import INT, ensure_address, dump_json, ensure_score
 
 METHOD_FMT = r'(?P<address>[a-z_0-9]+)(\.(?P<method>[a-zA-Z0-9_]+))?'
 RE_METHOD = re.compile(METHOD_FMT)
@@ -71,12 +71,12 @@ def parse_output(outputs: list, output: any) -> any:
 @click.command('call')
 @click.argument('expr')
 @click.argument('param', nargs=-1)
-@click.option('--value')
+@click.option('--value', type=INT, default=0, help='Value to transfer')
 @click.option("--keystore")
-@click.option('--step_limit', '-s', help="Step limit")
-@click.option('--height', '-h', type=int, default=None, help="Block height for query")
+@click.option('--step_limit', '-s', type=INT, help="Step limit")
+@click.option('--height', '-h', type=INT, default=None, help="Block height for query")
 @click.option('--raw', '-r', is_flag=True)
-def call(expr: str, param: List[str], value: str = 0, keystore: str = None, raw: bool = False, step_limit: str = None, height: int = None):
+def call(expr: str, param: List[str], value: str = 0, keystore: str = None, raw: bool = False, step_limit: int = None, height: int = None):
     '''
     Call method of the contract
     '''
@@ -118,7 +118,7 @@ def call(expr: str, param: List[str], value: str = 0, keystore: str = None, raw:
         params = make_params(info['inputs'], param)
         tx = CallTransactionBuilder(from_=w.address, to=addr, method=method, params=params, value=value, nid=svc.nid).build()
         if step_limit != None:
-            signed_tx = SignedTransaction(tx, w, int(step_limit, 0))
+            signed_tx = SignedTransaction(tx, w, step_limit)
             result = svc.send_transaction_and_pull(signed_tx)
         else:
             result = svc.estimate_and_send_tx(tx, w)

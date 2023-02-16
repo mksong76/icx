@@ -13,7 +13,7 @@ from .cui import Column, RowPrinter
 @click.command()
 @click.argument('addr', type=util.ADDRESS)
 @click.option('--full', type=click.BOOL, is_flag=True)
-@click.option('--height', type=util.HEXINT)
+@click.option('--height', type=util.INT)
 def get_balance(addr: str, full: bool = False, height: int = None):
     '''Get balance of the account'''
     svc = service.get_instance()
@@ -68,7 +68,7 @@ def get_data(hash: List[str], binary: bool, out: io.RawIOBase):
 @click.command(help="Get SCORE status")
 @click.argument("scores", type=util.SCORE, nargs=-1)
 @click.option('--full', is_flag=True)
-@click.option('--height', type=util.HEXINT)
+@click.option('--height', type=util.INT)
 def get_score(scores: List[str], height: int = None, full: bool = False):
     svc = service.get_instance()
     for score in scores:

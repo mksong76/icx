@@ -86,7 +86,7 @@ def dumps(entries: list, sep: str = '\n') -> str:
 @click.argument('addr', type=util.ADDRESS)
 @click.option('--raw', '-r', type=bool, is_flag=True)
 @click.option('--filter', '-f', type=str, default=None)
-@click.option('--height', '-h', type=util.HEXINT, default=None)
+@click.option('--height', '-h', type=util.INT, default=None)
 def get_apis(addr: str, raw: bool = False, height: int = None, filter: str = None):
     '''
     Get API information of the contract
