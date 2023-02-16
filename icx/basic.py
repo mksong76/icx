@@ -78,6 +78,9 @@ def get_score(scores: List[str], height: int = None, full: bool = False):
 @click.command(help="Get SCORE History")
 @click.argument("score", nargs=1)
 def get_codes(score: str):
+    score = util.ensure_address(score)
+    if score.startswith('hx'):
+        raise Exception('use smart contract address instead of EoA')
     svc = service.get_instance()
     height = None
     history = []
