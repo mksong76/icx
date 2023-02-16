@@ -83,16 +83,16 @@ def dumps(entries: list, sep: str = '\n') -> str:
 
 
 @click.command('apis')
-@click.argument('addr')
+@click.argument('addr', type=util.ADDRESS)
 @click.option('--raw', '-r', type=bool, is_flag=True)
 @click.option('--filter', '-f', type=str, default=None)
-@click.option('--height', '-h', type=int, default=None)
+@click.option('--height', '-h', type=util.HEXINT, default=None)
 def get_apis(addr: str, raw: bool = False, height: int = None, filter: str = None):
     '''
     Get API information of the contract
     '''
     svc = service.get_instance()
-    api = svc.get_score_api(util.ensure_address(addr), height=height)
+    api = svc.get_score_api(addr, height=height)
     if filter is not None:
         regex = re.compile(filter)
         new_api = []

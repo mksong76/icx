@@ -24,14 +24,20 @@ def ensure_address(addr: str) -> str:
         return defined_addresses[addr]
     elif addr.startswith('hx') or addr.startswith('cx'):
         prefix = addr[0:2]
-        idpart = addr[2:]
-        if len(idpart) < 40:
-            idpart = (('0'*40)+idpart)[-40:]
-        elif len(idpart) > 40:
-            idpart = idpart[-40:]
-        return prefix+idpart
+        idpart = bytes.fromhex(addr[2:])
+        if len(idpart) < 20:
+            idpart = ((b'\x00'*20)+idpart)[-20:]
+        elif len(idpart) > 20:
+            idpart = idpart[-20:]
+        return prefix+idpart.hex()
     else:
         raise Exception(f'InvalidAddress(addr={addr})')
+
+def ensure_score(addr: str) -> str:
+    addr = ensure_address(addr)
+    if not addr.startswith('cx'):
+        raise Exception(f'InvalidSCORE(addr={addr})')
+    return addr
 
 def jsonrpc_call(url, method: str, params: Any) -> Any:
     resp = requests.post(url, json={
@@ -127,4 +133,40 @@ class HexIntegerType(click.ParamType):
         except ValueError:
             self.fail(f'{value} is not a valid integer', param, ctx)
 
-HEX_INT = HexIntegerType()
+HEXINT = HexIntegerType()
+
+class AddressType(click.ParamType):
+    name = "address"
+    def convert(self, value, param, ctx) -> str:
+        if value is None:
+            return None
+        return ensure_address(value)
+
+ADDRESS = AddressType()
+
+class SCOREType(click.ParamType):
+    name = "score"
+    def convert(self, value, param, ctx) -> str:
+        if value is None:
+            return None
+        return ensure_score(value)
+
+SCORE = SCOREType()
+
+class BlockIDType(click.ParamType):
+    name = "blockID"
+    def convert(self, value, param, ctx) -> str:
+        if value is None:
+            return None
+        return ensure_block(value)
+
+BLOCKID = BlockIDType()
+
+class HashType(click.ParamType):
+    name = "hash"
+    def convert(self, value, param, ctx) -> str:
+        if value is None:
+            return None
+        return ensure_hash(value)
+
+HASH = HashType()

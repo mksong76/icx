@@ -13,7 +13,7 @@ from iconsdk.builder.transaction_builder import CallTransactionBuilder
 from iconsdk.icon_service import  SignedTransaction
 
 from . import scoreapi, service, wallet
-from .util import ensure_address, dump_json
+from .util import ensure_address, dump_json, ensure_score
 
 METHOD_FMT = r'(?P<address>[a-z_0-9]+)(\.(?P<method>[a-zA-Z0-9_]+))?'
 RE_METHOD = re.compile(METHOD_FMT)
@@ -84,7 +84,7 @@ def call(expr: str, param: List[str], value: str = 0, keystore: str = None, raw:
     if obj is None:
         raise Exception(f'Invalid parameter param={expr}')
 
-    addr = ensure_address(obj.group('address'))
+    addr = ensure_score(obj.group('address'))
 
     svc = service.get_instance()
     api = svc.get_score_api(addr, height=height)

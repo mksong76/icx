@@ -11,9 +11,9 @@ from .cui import Column, RowPrinter
 
 
 @click.command()
-@click.argument('addr')
+@click.argument('addr', type=util.ADDRESS)
 @click.option('--full', type=click.BOOL, is_flag=True)
-@click.option('--height', type=click.INT)
+@click.option('--height', type=util.HEXINT)
 def get_balance(addr: str, full: bool = False, height: int = None):
     '''Get balance of the account'''
     svc = service.get_instance()
@@ -66,9 +66,9 @@ def get_data(hash: List[str], binary: bool, out: io.RawIOBase):
             util.dump_json(data, fp=io.TextIOWrapper(out))
 
 @click.command(help="Get SCORE status")
-@click.argument("scores", nargs=-1)
+@click.argument("scores", type=util.SCORE, nargs=-1)
 @click.option('--full', is_flag=True)
-@click.option('--height', type=click.INT)
+@click.option('--height', type=util.HEXINT)
 def get_score(scores: List[str], height: int = None, full: bool = False):
     svc = service.get_instance()
     for score in scores:
@@ -76,11 +76,8 @@ def get_score(scores: List[str], height: int = None, full: bool = False):
         util.dump_json(result)
 
 @click.command(help="Get SCORE History")
-@click.argument("score", nargs=1)
+@click.argument("score", type=util.SCORE, nargs=1)
 def get_codes(score: str):
-    score = util.ensure_address(score)
-    if score.startswith('hx'):
-        raise Exception('use smart contract address instead of EoA')
     svc = service.get_instance()
     height = None
     history = []

@@ -30,7 +30,7 @@ class VOTEITEM:
 
 
 @click.command('vote')
-@click.argument('height', type=util.HEX_INT)
+@click.argument('height', type=util.HEXINT)
 def check_votes(height: int):
     '''
     Check votes of the block and show vote information

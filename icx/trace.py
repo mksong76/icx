@@ -33,7 +33,7 @@ class ColorPicker:
 
 
 @click.command(help='Get the trace of the transaction')
-@click.argument('txhash')
+@click.argument('txhash', type=util.HASH)
 @click.option('--raw', is_flag=True)
 def get_trace(txhash: str, raw: bool):
     svc = service.get_instance()
