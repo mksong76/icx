@@ -6,7 +6,8 @@ from typing import List
 
 from . import service, util
 
-RE_FRAME = re.compile(r'FRAME\[(?P<frameid>\d+)\] (START parent=FRAME\[(?P<parent>\d+)]|.+)')
+RE_FRAME_START = re.compile(r'FRAME\[(?P<frameid>\d+)\] (START parent=FRAME\[(?P<parent>\d+)]|.+)')
+RE_FRAME_PREFIX = re.compile(r'FRAME\[(?P<frameid>\d+)\]')
 
 FRAME_COLORS = [
     'white',
@@ -46,7 +47,7 @@ def get_trace(txhash: str, raw: bool):
         prefixes = []
         for item in trace['logs']:
             msg = item['msg']
-            frame = RE_FRAME.match(msg)
+            frame = RE_FRAME_START.match(msg)
             if frame is None:
                 click.echo(msg)
                 continue
@@ -68,5 +69,12 @@ def get_trace(txhash: str, raw: bool):
                 depth = frame_depth[id]
                 color = frame_colors[id]
 
-            msg = ''.join(prefixes[0:depth])+click.style(msg, fg=color)
-            click.echo(msg)
+            lines = msg.split('\n')
+            line_prefix = ''.join(prefixes[0:depth])
+
+            head_line = lines.pop(0)
+            m = RE_FRAME_PREFIX.match(head_line)
+            frame_prefix = m.group(0) if m else ''
+            click.echo(line_prefix+click.style(head_line, fg=color))
+            for line in lines:
+                click.echo(line_prefix+click.style(f'{frame_prefix} {line}', fg=color))
