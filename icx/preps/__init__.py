@@ -15,5 +15,6 @@ def main(ctx: click.Context, store: str = None):
 
 main.add_command(prep.set_seed)
 main.add_command(prep.get_prep)
+main.add_command(prep.inspect_prep)
 main.add_command(update.update_preps_json)
 main.add_command(status.show_status)

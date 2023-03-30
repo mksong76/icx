@@ -245,6 +245,21 @@ def get_prep(obj: dict, key: str, raw: bool, height: str):
             Row(lambda obj: int(obj['stat']['realTotal'], 0), 20, '{:>20,}', 'Validation Oppitunity'),
         ]).print_header().print_data(prep_info).print_separater()
 
+@click.command("inspect")
+@click.pass_obj
+@click.argument('key')
+def inspect(obj: dict, key: str):
+    '''
+    Inspect PRep information
+    '''
+    prep_info = load_prep_store(obj[CONTEXT_PREP_STORE])
+    prep = search_prep(prep_info, key)
+    if RPC not in prep:
+        raise Exception("unavailble RPC")
+    rpc = prep[RPC]
+    inspection = node_inspect(rpc)
+    util.dump_json(inspection)
+
 def handlePReps(obj: dict, store: str):
     # ensure CONTEXT_PREP_STORE is set
     if store is None:
