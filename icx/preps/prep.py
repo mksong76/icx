@@ -248,7 +248,7 @@ def get_prep(obj: dict, key: str, raw: bool, height: str):
 @click.command("inspect")
 @click.pass_obj
 @click.argument('key')
-def inspect(obj: dict, key: str):
+def inspect_prep(obj: dict, key: str):
     '''
     Inspect PRep information
     '''
