@@ -234,7 +234,7 @@ def show_asset_of(addr: str):
     #print(json.dumps(bond, indent=2))
 
     claimable = int(iscore['estimatedICX'], 0)
-    staked, unstaking, _ = sum_stake(stake)
+    staked, unstaking, remaining_blocks = sum_stake(stake)
     delegated, voting_power = sum_delegation(delegation)
     bonded, unbonding, _ = sum_bond(bond)
     asset = balance+claimable+staked+unstaking
@@ -244,8 +244,12 @@ def show_asset_of(addr: str):
         entries += [
             [ 'BALANCE', balance, balance/asset ],
             [ 'CLAIMABLE', claimable, claimable/asset ],
-            [ 'UNSTAKE', unstaking, unstaking/asset ],
         ]
+        if unstaking > 0:
+            remaining_time = timedelta(seconds=remaining_blocks*2)
+            entries += [
+                [ 'UNSTAKE', unstaking, unstaking/asset, f'{remaining_time}'],
+            ]
         if staked > 0:
             entries += [
                 [ 'STAKED', staked, staked/asset ],
@@ -271,7 +275,10 @@ def show_asset_of(addr: str):
     for entry in entries:
         if entry[1] == 0 and entry[2] == 0:
             continue
-        print(f'[#] {entry[0]:13s} : {format_decimals(entry[1],3):>16s} ICX {entry[1]*price//ICX:12,} {sym} {entry[2]*100:7.3f}%')
+        entry_str = f'[#] {entry[0]:13s} : {format_decimals(entry[1],3):>16s} ICX {entry[1]*price//ICX:12,} {sym} {entry[2]*100:7.3f}%'
+        if len(entry)>3:
+            entry_str += f' ({entry[3]})'
+        print(entry_str)
 
 @click.command("auto")
 @click.option("--stake", 'target', type=int, help="Amount to stake (negative for asset-X)")
