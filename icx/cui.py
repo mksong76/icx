@@ -33,15 +33,23 @@ class RowPrinter:
         formats = []
         seps = []
         names = []
+        hdr_formats = []
         for column in columns:
             formats.append(column.format)
             seps.append('-'*column.size)
             names.append(column.name)
+            if '>' in column.format:
+                hdr_formats.append(f'{{:>{column.size}}}')
+            elif '^' in column.format:
+                hdr_formats.append(f'{{:^{column.size}}}')
+            else:
+                hdr_formats.append(f'{{:{column.size}}}')
         self.__columns = columns
         self.__file = file
         self.__format_str = '| ' + ' | '.join(formats) + ' |'
         self.__sep_str = '+-' + '-+-'.join(seps) + '-+'
-        self.__header = self.__format_str.format(*names)
+        hdr_fmt = '| ' + ' | '.join(hdr_formats) + ' |'
+        self.__header = hdr_fmt.format(*names)
 
     def print_header(self, **kwargs):
         click.secho(self.__header, reverse=True, file=self.__file, **kwargs)
@@ -54,6 +62,22 @@ class RowPrinter:
         for column in self.__columns:
             values.append(column.get_value(*args))
         click.secho(self.__format_str.format(*values), file=self.__file, **kwargs)
+
+    def print_spanned(self, idx: int, size: int, data: List[any], **kwargs):
+        formats = []
+        spanned = 0
+        for i in range(len(self.__columns)):
+            c = self.__columns[i]
+            if i<idx:
+                formats.append(f'{{:{c.size}}}')
+            elif i<idx+size-1:
+                spanned += c.size+3
+            else:
+                formats.append(f'{{:{c.size+spanned}}}')
+                spanned = 0
+        format_str = '| ' + ' | '.join(formats) + ' |'
+        click.secho(format_str.format(*data), file=self.__file, **kwargs)
+
 
 class Row(Column):
     def __init__(self, *args, **kwargs) -> None:
