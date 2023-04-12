@@ -17,6 +17,7 @@ from .. import service
 from ..config import CONTEXT_CONFIG, Config
 from ..market import upbit
 from ..util import CHAIN_SCORE, ICX, ensure_address, format_decimals
+from ..cui import Column, RowPrinter
 from . import wallet
 
 CONFIG_STAKE_TARGETS = "target_balances"
@@ -260,7 +261,6 @@ def show_asset_of(addr: str):
             ]
     entries += [
         [ 'ASSET', asset, 1.0 ],
-        [ 'PRICE', ICX, 0.0 ]
     ]
 
     locale.setlocale(locale.LC_ALL, '')
@@ -271,14 +271,22 @@ def show_asset_of(addr: str):
         sym = 'ICX'
         price = 1
 
-    print(f'[#] ADDRESS       : {addr}')
+    columns = [
+        Column(lambda x: x[0], 13, '{:13s}', "Name"),
+        Column(lambda x: format_decimals(x[1],3), 20, '{:>16s} ICX', 'ICX'),
+        Column(lambda x: x[1]*price//ICX, 16, f'{{:>12,}} {sym[:3]:3s}', sym),
+        Column(lambda x: x[2]*100, 8, '{:7.3f}%', 'Portion'),
+        Column(lambda x: x[3] if len(x)>3 else '', 25, '{:<25}', 'Note'),
+    ]
+
+    p = RowPrinter(columns)
+    p.print_spanned(1, 4, ["ADDRESS", addr], reverse=True, underline=True)
+    p.print_header()
     for entry in entries:
         if entry[1] == 0 and entry[2] == 0:
             continue
-        entry_str = f'[#] {entry[0]:13s} : {format_decimals(entry[1],3):>16s} ICX {entry[1]*price//ICX:12,} {sym} {entry[2]*100:7.3f}%'
-        if len(entry)>3:
-            entry_str += f' ({entry[3]})'
-        print(entry_str)
+        p.print_data(entry, underline=True)
+    p.print_data(['PRICE', ICX, 0.0], reverse=True)
 
 @click.command("auto")
 @click.option("--stake", 'target', type=int, help="Amount to stake (negative for asset-X)")
