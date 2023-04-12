@@ -106,15 +106,26 @@ def print_keystores(keystores: dict):
         printer.print_separater()
 
 @click.command()
-@click.argument('name', type=click.STRING, required=False)
-@click.argument('file', type=click.STRING, required=False)
+@click.argument('name', metavar='[<name>]', type=click.STRING, required=False)
+@click.argument('file', metavar='[<file>]', type=click.STRING, required=False)
 @click.option('--delete', '-d', type=click.BOOL, is_flag=True, default=False)
 @click.option('--verify', '-v', type=click.BOOL, is_flag=True, default=False)
-@click.option('--rename', '-r', type=click.STRING, default=None)
+@click.option('--rename', '-r', metavar='<new name>', type=click.STRING, default=None)
 @click.pass_obj
 def main(obj: dict, name: str = None, file: str = None, delete: bool = None, verify: bool = None, rename: str = None):
     '''
     Manage keystores
+
+    \b
+    With no arguments, it shows list of keystores.
+    \b
+    With a name and file, it imports new keystore.
+        --verify : for verifying password before import
+    \b
+    With a name, it dumps the keystore with no option.
+        --delete : to delete the keystore
+        --verify : to verify password of the keystore
+        --rename <new name> : to change the name of the keystore
     '''
     config: Config = obj[CONTEXT_CONFIG]
     keystores: dict = config.get(CONFIG_KEYSTORES)
