@@ -7,7 +7,7 @@ from typing import List
 import click
 
 from . import service, util
-from .cui import Column, RowPrinter
+from .cui import Column, Header, MapPrinter, Row, RowPrinter
 
 
 @click.command()
@@ -98,10 +98,41 @@ def get_codes(score: str):
 
     p = RowPrinter([
         Column(lambda height, status: height, 10, format='{:>10}', name="Height"),
-        Column(lambda height, status: status['current']['deployTxHash'], 66, name="Deploy TX Hash"),
         Column(lambda height, status: status['current']['type'], 7, name="Type"),
         Column(lambda height, status: status['current']['codeHash'], 66, name="Code Hash"),
     ])
     p.print_header()
     for height, status in history:
         p.print_data(height, status)
+
+@click.command('account', help='ICON account information')
+@click.argument('addr', type=util.ADDRESS)
+def show_account(addr: str):
+    svc = service.get_instance()
+    info = { 'address': addr }
+    rows = [
+        Header(lambda v: 'Basic', 5, '{}'),
+        Row(lambda v: v['address'], 42, '{}', 'Address'),
+    ]
+
+    info['balance'] = svc.get_balance(addr)
+    rows += [
+        Row(lambda v: util.format_decimals(v['balance'], 3), 16, '{:>12s} ICX', 'Balance'),
+    ]
+
+    if addr.startswith('cx'):
+        info['status'] = svc.get_score_status(addr)
+        rows += [
+            Header(lambda v: 'SCORE', 20, '{:^}'),
+            Row(lambda v: v['status'].get('owner',''), 42, '{:42s}', 'Owner'),
+            Row(lambda v: v['status'].get('current',{}).get('type', ''), 10, '{:10s}', 'Type'),
+            Row(lambda v: v['status'].get('current',{}).get('codeHash', ''), 66, '{:66s}', 'Code Hash'),
+        ]
+        if 'depositInfo' in info['status']:
+            rows += [
+                Header(lambda v: 'DepositInfo', 20, '{:^}'),
+                Row(lambda v: util.format_decimals(v['status']['depositInfo'].get('availableDeposit', '0x0'),3), 16, '{:>12s} ICX', 'Avaialble'),
+                Row(lambda v: 'true' if v['status']['depositInfo'].get('useSystemDeposit', '0x0')=='0x1' else 'false', 5, '{:5}', 'Use System Deposit')
+            ]
+    rows.append(Header(lambda v: 'END', 3, '{:^}'))
+    MapPrinter(rows).print_data(info)

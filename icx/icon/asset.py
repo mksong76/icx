@@ -5,7 +5,7 @@ import sys
 from audioop import add
 from cProfile import label
 from datetime import timedelta
-from typing import List, Tuple
+from typing import List, Tuple, Union
 
 import click
 from iconsdk.builder.call_builder import CallBuilder
@@ -18,15 +18,17 @@ from ..config import CONTEXT_CONFIG, Config
 from ..market import upbit
 from ..util import CHAIN_SCORE, ICX, ensure_address, format_decimals
 from ..cui import Column, RowPrinter
-from . import wallet
+from ..wallet import wallet
 
 CONFIG_STAKE_TARGETS = "target_balances"
 CONFIG_SUPPORTING_PREPS = "supporting_preps"
 CONTEXT_ASSET = 'asset'
 
 class AssetService:
-    def __init__(self, url: str = None):
-        self.service = service.get_instance(url)
+    def __init__(self, svc: Union[str,service.Service,None] = None):
+        if type(svc) is not service.Service:
+            svc = service.get_instance(svc)
+        self.service = svc
 
     def query_iscore(self, address: str) -> dict:
         return self.service.call(CallBuilder(
@@ -398,19 +400,8 @@ def show_delegation(ctx: dict):
         value = int(entry["value"], 0)
         print(f'[#] {name[:20]:20} {address} : {format_decimals(value,3):>16s} ')
 
-@click.group()
-@click.option('--key_store', envvar='ICX_ASSET_KEY_STORE')
-@click.pass_obj
-def main(ctx: dict, key_store: str = None):
-    '''
-    Manage ICON assets (stake/delegation/claim...)
-    '''
+def handleAssetKeyStore(obj: dict, key_store: Union[str,None] = None):
     if key_store is not None:
-        ctx[CONTEXT_ASSET] = wallet.get_instance(key_store)
+        obj[CONTEXT_ASSET] = wallet.get_instance(key_store)
     else:
-        ctx[CONTEXT_ASSET] = wallet.get_instance()
-
-
-main.add_command(show_asset)
-main.add_command(stake_auto)
-main.add_command(show_delegation)
+        obj[CONTEXT_ASSET] = wallet.get_instance()

@@ -4,13 +4,14 @@
 import json
 import re
 import sys
-from typing import List
+from typing import List, Tuple
 
 import click
 
 from iconsdk.builder.call_builder import CallBuilder
 from iconsdk.builder.transaction_builder import CallTransactionBuilder
 from iconsdk.icon_service import  SignedTransaction
+from iconsdk.monitor import EventMonitorSpec, EventFilter
 
 from . import scoreapi, service, wallet
 from .util import INT, ensure_address, dump_json, ensure_score
@@ -57,6 +58,30 @@ def make_params(inputs: list, params: List[str]) -> dict:
         idx += 1
     return param_data
 
+def parse_event(input: dict, param: str) -> any:
+    if param == 'null':
+        return None
+    else:
+        return parse_param(input, param)
+
+def make_eventfilter(addr: str, info: dict, params: List[str]) -> EventFilter:
+    inputs: List[dict] = info['inputs']
+    if len(params) > len(inputs):
+        raise Exception('Too many parameters')
+    idx = 0
+    indexed = 0
+    args = []
+    types = []
+    for input in inputs:
+        if idx<len(params):
+            value = parse_event(input, params[idx])
+            args.append(value)
+            if int(input.get('indexed', '0x0'), 0):
+                indexed += 1
+        types.append(input['type'])
+        idx += 1
+    return EventFilter(addr, f'{info["name"]}({",".join(types)})', indexed, *args)
+
 def parse_output(outputs: list, output: any) -> any:
     tname = outputs[0]['type']
     if tname == 'int':
@@ -96,10 +121,10 @@ def call(expr: str, param: List[str], value: str = 0, keystore: str = None, raw:
         click.echo(scoreapi.dumps(api))
         return
 
-    methods = list(filter(lambda x: x['type'] == 'function' and method == x['name'], api))
+    methods = list(filter(lambda x: x['type'] in ['function','eventlog'] and method == x['name'], api))
 
     if len(methods) == 0:
-        methods = list(filter(lambda x: x['type'] == 'function' and method in x['name'], api))
+        methods = list(filter(lambda x: x['type'] in ['function','eventlog'] and method in x['name'], api))
         if len(methods) == 0:
             raise Exception(f'No methods found like={method}')
         click.echo(scoreapi.dumps(methods), file=sys.stderr)
@@ -113,7 +138,7 @@ def call(expr: str, param: List[str], value: str = 0, keystore: str = None, raw:
             dump_json(value)
         else:
             print(parse_output(info['outputs'], value))
-    else:
+    elif info['type'] == 'function':
         w = wallet.get_instance(keystore)
         params = make_params(info['inputs'], param)
         tx = CallTransactionBuilder(from_=w.address, to=addr, method=method, params=params, value=value, nid=svc.nid).build()
@@ -123,3 +148,14 @@ def call(expr: str, param: List[str], value: str = 0, keystore: str = None, raw:
         else:
             result = svc.estimate_and_send_tx(tx, w)
         dump_json(result)
+    else:
+        if height is None:
+            blk = svc.get_block('latest')
+            height = blk['height']+1
+        event_filter = make_eventfilter(addr, info, param)
+        spec = EventMonitorSpec(height, event_filter, True)
+        monitor = svc.monitor(spec)
+        print("Waiting for events", file=sys.stderr)
+        while True:
+            obj = monitor.read()
+            dump_json(obj, flush=True)

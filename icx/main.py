@@ -10,10 +10,9 @@ import click
 from icx.cui import Column, RowPrinter
 from icx.util import datetime_from_ts, dump_json, format_dt
 
-from . import (basic, blockinterval, call, preps, rlp, scoreapi, service,
+from . import (basic, blockinterval, call, icon, rlp, scoreapi, service,
                trace, txscan, network, wallet, blockvotes)
 from .config import CONTEXT_CONFIG, Config
-from .wallet import asset
 
 CONFIG_NETWORKS='networks'
 
@@ -67,17 +66,20 @@ main.add_command(basic.get_result, 'result')
 main.add_command(basic.get_data, 'data')
 main.add_command(basic.get_score, 'score')
 main.add_command(basic.get_codes, 'codes')
+main.add_command(basic.show_account, 'account')
 main.add_command(trace.get_trace, 'trace')
 main.add_command(blockinterval.block_interval, 'interval')
 main.add_command(txscan.scan, 'txscan')
 main.add_command(rlp.convert, 'rlp')
 main.add_command(call.call, 'call')
-main.add_command(preps.main, 'prep')
-main.add_command(asset.main, 'asset')
 main.add_command(network.main, 'net')
 main.add_command(wallet.main, 'ks')
 main.add_command(time_convert, 'time')
 main.add_command(blockvotes.check_votes, 'votes')
+
+main.add_command(icon.main)
+main.add_command(icon.assets)
+main.add_command(icon.preps)
 
 if __name__ == '__main__':
     main()

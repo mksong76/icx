@@ -65,7 +65,7 @@ def dump_json(value: any, fp=sys.stdout, flush=False):
         if isinstance(x, bytes):
             return '0x'+x.hex()
         raise TypeError(f'UnknownType(type={type(x)})')
-    json.dump(value, fp=fp, indent=2, default=json_handler, flush=flush)
+    json.dump(value, fp=fp, indent=2, default=json_handler)
     print('', file=fp, flush=flush)
 
 def ensure_block(id: str) -> Union[int, str]:

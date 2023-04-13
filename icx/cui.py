@@ -80,12 +80,10 @@ class RowPrinter:
 
 
 class Row(Column):
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
+    pass
 
 class Header(Row):
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
+    pass
 
 class MapPrinter:
     def __init__(self, rows: List[Row], file=sys.stdout) -> None:

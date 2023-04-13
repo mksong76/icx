@@ -4,7 +4,7 @@ import io
 import json
 import os
 import sys
-from typing import Union
+from typing import Optional, Union
 
 import click
 from iconsdk.wallet.wallet import KeyWallet, Wallet
