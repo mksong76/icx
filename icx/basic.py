@@ -105,8 +105,8 @@ def get_codes(score: str):
     for height, status in history:
         p.print_data(height, status)
 
-@click.command('account', help='ICON account information')
-@click.argument('addr', type=util.ADDRESS)
+@click.command('account', help='Show account information')
+@click.argument('addr', metavar='<address>', type=util.ADDRESS)
 def show_account(addr: str):
     svc = service.get_instance()
     info = { 'address': addr }
