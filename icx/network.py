@@ -18,13 +18,22 @@ def handleFlag(obj: dict, net: str):
     obj[CONTEXT_NETWORK] = net
     service.set_default(*networks[net])
 
-@click.command('net', help='Show network information without name, delete network information without URL and NID. Otherwise set network information')
+@click.command('net')
 @click.pass_obj
 @click.argument('name', type=click.STRING, required=False)
 @click.argument('url', type=click.STRING, required=False)
 @click.argument('nid', type=click.STRING, required=False)
-@click.option('--delete', '-d', type=click.BOOL, is_flag=True, default=False)
-def main(obj: dict, name: str = None, url: str = None, nid: str = None, delete: bool = None):
+@click.option('--delete', '-d', type=click.BOOL, is_flag=True, default=False, help='Delete network')
+@click.option('--rename', '-r', metavar='<OLD>', type=click.STRING, help='Rename network')
+def main(obj: dict, name: str = None, url: str = None, nid: str = None, delete: bool = None, rename: str = None):
+    '''
+    Manage network information
+
+    \b
+    Show network information without name,
+    with <NAME>, it shows the network information (may delete or rename).
+    with <NAME> <URL> <NID>, it saves network information.
+    '''
     config: Config = obj[CONTEXT_CONFIG]
     networks: dict = config[CONFIG_NETWORKS]
 
@@ -43,6 +52,18 @@ def main(obj: dict, name: str = None, url: str = None, nid: str = None, delete: 
             printer.print_separater()
         return
     if url is None:
+        if rename is not None:
+            if rename not in networks:
+                click.secho(f'No network named{rename}', color='red', file=sys.stderr)
+                return
+            if name in networks:
+                click.secho(f'Network {name} is already exists', color='red', file=sys.stderr)
+                return
+            networks[name] = networks[rename]
+            del networks[rename]
+            config[CONFIG_NETWORKS] = networks
+            click.echo(f'Network {rename} renamed to {name}')
+            return
         if name in networks:
             if delete:
                 del networks[name]
