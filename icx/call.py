@@ -80,7 +80,7 @@ def make_eventfilter(addr: str, info: dict, params: List[str]) -> EventFilter:
                 indexed += 1
         types.append(input['type'])
         idx += 1
-    return EventFilter(addr, f'{info["name"]}({",".join(types)})', indexed, *args)
+    return EventFilter(f'{info["name"]}({",".join(types)})', addr, indexed, *args)
 
 def parse_output(outputs: list, output: any) -> any:
     tname = outputs[0]['type']
