@@ -33,10 +33,10 @@ INTERVAL_THREADS = 6
 
 @click.command()
 @click.argument('start', type=click.INT)
-@click.argument('count', type=click.INT)
+@click.argument('count', type=click.INT, required=False)
 @click.option('--guide', help="Block interval configuration in milli-second", type=click.INT, default=1000)
 @click.option('--threads', '-t', type=click.INT, default=INTERVAL_THREADS)
-def block_interval(start: int, count: int, guide: int, threads: int):
+def block_interval(start: int, guide: int, threads: int, count: int = None):
     '''
     Check intervals of "count" blocks from "start" height
     '''
@@ -46,6 +46,11 @@ def block_interval(start: int, count: int, guide: int, threads: int):
     moving_average = MovingAverage(INTERVAL_WINDOW)
     executor = futures.ThreadPoolExecutor()
     items: List[futures.Future] = []
+
+    if count is None:
+        blk = svc.get_block('latest')
+        count = start
+        start = blk['height'] - count
 
     blk = svc.get_block(start-1)
     ts = blk['time_stamp']
@@ -59,4 +64,4 @@ def block_interval(start: int, count: int, guide: int, threads: int):
         ts2 = blk['time_stamp']
         interval, ts = ts2-ts, ts2
         interval_avg = moving_average.add(interval)
-        print(f'[{height:6d}] interval={interval//1000:10,}ms ({(interval-guide_ms)/1000:9.3f}ms) average={interval_avg/1000:10.3f}ms ({(interval_avg-guide_ms)/1000:9.3f}ms)')
+        print(f'[{blk["height"]:6d}] interval={interval//1000:10,}ms ({(interval-guide_ms)/1000:9.3f}ms) average={interval_avg/1000:10.3f}ms ({(interval_avg-guide_ms)/1000:9.3f}ms)')
