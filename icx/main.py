@@ -11,7 +11,7 @@ from icx.cui import Column, RowPrinter
 from icx.util import datetime_from_ts, dump_json, format_dt
 
 from . import (basic, blockinterval, call, icon, rlp, scoreapi, service,
-               trace, txscan, network, wallet, blockvotes)
+               trace, txscan, network, wallet, blockvotes, verifytx)
 from .config import CONTEXT_CONFIG, Config
 
 CONFIG_NETWORKS='networks'
@@ -76,6 +76,7 @@ main.add_command(network.main, 'net')
 main.add_command(wallet.main, 'ks')
 main.add_command(time_convert, 'time')
 main.add_command(blockvotes.check_votes, 'votes')
+main.add_command(verifytx.verify_tx, 'verifytx')
 
 main.add_command(icon.main)
 main.add_command(icon.assets)
