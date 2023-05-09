@@ -5,7 +5,7 @@ import click
 
 from .. import service, util
 from ..cui import Header, Row, MapPrinter
-from .asset import AssetService
+from .asset import AssetService, sum_stake
 from iconsdk.builder.call_builder import CallBuilder
 
 @click.command('account', help='ICON account information')
@@ -24,6 +24,26 @@ def show_account(addr: str):
         Row(lambda v: util.format_decimals(v['balance'], 3), 16, '{:>12s} ICX', 'Balance'),
     ]
 
+    claimable = int(asset.query_iscore(addr)['estimatedICX'], 0)
+    if claimable > 0:
+        info['claimable'] = claimable
+        rows += [
+            Row(lambda v: util.format_decimals(v['claimable'], 3), 16, '{:>12s} ICX', 'Claimable'),
+        ]
+
+    staked, unstaking, _ = sum_stake(asset.get_stake(addr))
+    if staked > 0 or unstaking > 0:
+        info['stake'] = {
+            "staked": staked,
+            "unstaking": unstaking,
+        }
+        rows += [
+            Row(lambda v: util.format_decimals(v['stake']['staked'], 3),
+                24, '{:>20s} ICX', 'Stake'),
+            Row(lambda v: util.format_decimals(v['stake']['unstaking'], 3),
+                24, '{:>20s} ICX', 'Unstaking'),
+        ]
+
     if addr.startswith('cx'):
         info['status'] = svc.get_score_status(addr)
         rows += [
@@ -33,7 +53,6 @@ def show_account(addr: str):
             Row(lambda v: v['status'].get('current',{}).get('codeHash', ''), 66, '{:66s}', 'Code Hash'),
         ]
     else:
-
         try:
             info['prep'] = svc.call(CallBuilder().to(util.CHAIN_SCORE)
                     .method('getPRep')
@@ -51,23 +70,5 @@ def show_account(addr: str):
             ]
         except:
             pass
-
-        try:
-            stake = asset.get_stake(addr)
-            if int(stake['stake'], 0) > 0:
-                info['stake'] = {
-                    "stake": int( stake['stake'], 0 ),
-                    "unstake": sum(map(lambda v: int(v['unstake'], 0), stake['unstakes'])),
-                }
-                rows += [
-                    Header(lambda v: 'Stake Info', 20, '{:^20s}'),
-                    Row(lambda v: util.format_decimals(v['stake']['stake'], 3),
-                        20, '{:>20s}', 'Stake'),
-                    Row(lambda v: util.format_decimals(v['stake']['unstake'], 3),
-                        20, '{:>20s}', 'Unstake'),
-                ]
-        except:
-            raise
-
 
     MapPrinter(rows).print_data(info)
