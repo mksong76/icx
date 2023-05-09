@@ -55,6 +55,9 @@ class MyWallet(Wallet):
     def sign(self, data: bytes) -> bytes:
         return self.__get_loaded().sign(data)
 
+    def public_key(self, compressed: bool = True, hexadecimal: bool = True) -> Union[str, bytes]:
+        return self.__get_loaded().public_key(compressed, hexadecimal)
+
     address = property(get_address)
     loaded = property(__get_loaded)
 
@@ -111,8 +114,9 @@ def print_keystores(keystores: dict):
 @click.option('--delete', '-d', type=click.BOOL, is_flag=True, default=False)
 @click.option('--verify', '-v', type=click.BOOL, is_flag=True, default=False)
 @click.option('--rename', '-r', metavar='<new name>', type=click.STRING, default=None)
+@click.option('--pubkey', '-p', type=click.BOOL, is_flag=True, default=False)
 @click.pass_obj
-def main(obj: dict, name: str = None, file: str = None, delete: bool = None, verify: bool = None, rename: str = None):
+def main(obj: dict, name: str = None, file: str = None, delete: bool = None, verify: bool = None, rename: str = None, pubkey: bool = None):
     '''
     Manage keystores
 
@@ -126,6 +130,7 @@ def main(obj: dict, name: str = None, file: str = None, delete: bool = None, ver
         --delete : to delete the keystore
         --verify : to verify password of the keystore
         --rename <new name> : to change the name of the keystore
+        --pubkey : to verify password and show publickey
     '''
     config: Config = obj[CONTEXT_CONFIG]
     keystores: dict = config.get(CONFIG_KEYSTORES)
@@ -160,6 +165,14 @@ def main(obj: dict, name: str = None, file: str = None, delete: bool = None, ver
             keystores[rename] = ks
             config[CONFIG_KEYSTORES] = keystores
             click.echo(f'Keystore [{name}] is renamed to [{rename}]')
+            return
+        elif pubkey:
+            password = click.prompt("WalletPassword", hide_input=True)
+            try:
+                wallet = load_wallet_from_dict(keystores[name], password)
+                click.echo(f'0x{wallet.get_public_key()}', file=sys.stdout)
+            except:
+                click.secho(f'Fail to verify keystore', color='red', file=sys.stderr)
             return
         else:
             json.dump(keystores[name], sys.stdout)
