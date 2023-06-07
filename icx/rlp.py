@@ -125,7 +125,7 @@ def encode(obj: RLPValue) -> bytes:
             return encode_bytes(bytes.fromhex(obj[2:]))
         else:
             raise Exception(f'UnknownString({obj})')
-    elif isinstance(obj, list):
+    elif isinstance(obj, list) or isinstance(obj, tuple):
         bs = b''
         for item in obj:
             bs += encode(item)
