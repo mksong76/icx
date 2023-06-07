@@ -208,7 +208,7 @@ def get_prep(obj: dict, key: str, raw: bool, height: str):
         prep_addr = preps[prep_index]['address']
 
     if prep_index is None:
-        raise Exception(f'fail to find PRep key={key:q}')
+        raise Exception(f'fail to find PRep key={key}')
 
     prep_info:dict = icon_getPRep(prep_addr, rpc, height=height)
     prep_stats = icon_getPRepStats(rpc, height=height)['preps']
