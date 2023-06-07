@@ -48,16 +48,16 @@ def jsonrpc_call(url, method: str, params: Any) -> Any:
         "params": params
     }, timeout=1.0)
     if resp.status_code != 200:
-        raise f"HTTPError(status={resp.status_code}) "
+        raise Exception(f"HTTPError(status={resp.status_code})")
     res = resp.json()
     if "code" in res:
-        raise f"JSONRPCERror(code={res['code']},msg={res['message']}"
+        raise Exception("JSONRPCERror(code={res['code']},msg={res['message']}")
     return res['result']
 
 def rest_get(url, timeout=1.0) -> Any:
     resp = requests.get(url, timeout=timeout)
     if resp.status_code != 200:
-        raise f"HTTPError(status={resp.status_code}) "
+        raise Exception(f"HTTPError(status={resp.status_code})")
     return resp.json()
 
 def dump_json(value: any, fp=sys.stdout, flush=False):
