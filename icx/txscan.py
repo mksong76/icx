@@ -40,8 +40,8 @@ TX_COLUMNS = {
 TX_HEIGHT_COLUMN = Column(lambda title, tx: title, 8, format='{:>8}', name='Height')
 DEFAULT_COLUMN_NAMES = [ 'id', 'from...', 'type', 'method', 'to', 'value' ]
 
-def show_txs(printer: RowPrinter, height: int, txs: list, reverse: bool, **kwargs):
-    txs = txs.__reversed__() if reverse else txs
+def show_txs(printer: RowPrinter, height: int, txs: list, reversed: bool, **kwargs):
+    txs = txs.__reversed__() if reversed else txs
     title = str(height)
     for tx in txs:
         printer.print_data(title, tx, **kwargs)
@@ -120,7 +120,12 @@ def scan(columns: List[str], block, forward, nobase, receivers, senders, address
     printer = RowPrinter(column_data)
 
     id = ensure_block(block)
-    sep_print = False
+    print_header = True
+    style_index = 0
+    styles = [
+        {},
+        { 'bg': 'bright_black'},
+    ]
     while True:
         print(f'{TC_CLEAR}>Get Block {id}\r', end='')
         blk = svc.get_block(id)
@@ -128,10 +133,11 @@ def scan(columns: List[str], block, forward, nobase, receivers, senders, address
         txs = blk['confirmed_transaction_list']
         txs = list(filter(tx_filter, txs))
         if len(txs) > 0:
-            if not sep_print:
+            if print_header:
                 printer.print_header(bold=True)
-                sep_print = True
-            show_txs(printer, height, txs, not forward)
+                print_header = False
+            show_txs(printer, height, txs, not forward, **styles[style_index])
+            style_index = (style_index+1)%len(styles)
             #printer.print_separater()
         if forward:
             id = height+1
