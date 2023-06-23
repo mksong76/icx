@@ -1,5 +1,6 @@
 import base64
 from hashlib import sha3_256
+from typing import Optional
 import click
 import coincurve
 from . import service
@@ -28,6 +29,30 @@ class VOTEITEM:
     TIMESTAMP = 0
     SIGNATURE = 1
 
+def get_next_validators(svc: service.Service = None, header: list = None, height: int = None):
+    if svc is None:
+        svc = service.get_instance()
+
+    if header is None:
+        if height is None:
+            last = svc.get_block('latest')
+            height = last['height']
+        hdr_b64 = svc.get_block_header_by_height(height)
+        hdr_bs = base64.b64decode(hdr_b64)
+        header = rlp.decode_bytes(hdr_bs)
+
+    validators_hash = header[BLOCK.NEXTVALIDATOR_HASH]
+    validators_b64 = svc.get_data_by_hash(f'0x{validators_hash.hex()}')
+    validators_bs = base64.b64decode(validators_b64)
+    validators = rlp.decode_bytes(validators_bs)
+    return list(map(lambda v: f'hx{v[1:].hex()}', validators))
+
+@click.command('validators')
+@click.option('--height', '-h', type=util.INT)
+def show_validators(height: int = None):
+    validators = get_next_validators(height = height)
+    for v in validators:
+        print(v)
 
 @click.command('vote')
 @click.argument('height', type=util.INT)
@@ -66,11 +91,7 @@ def check_votes(height: int):
         addr = f'hx{sha3_256(pk.format(compressed=False)[1:]).digest()[-20:].hex()}'
         voted.append(addr)
 
-    validators_hash = phdr[BLOCK.NEXTVALIDATOR_HASH]
-    validators_b64 = svc.get_data_by_hash(f'0x{validators_hash.hex()}')
-    validators_bs = base64.b64decode(validators_b64)
-    validators = rlp.decode_bytes(validators_bs)
+    validators = get_next_validators(svc, header=phdr)
     proposer = f'hx{hdr[BLOCK.PROPOSER][1:].hex()}'
-    for v in validators:
-        addr = f'hx{v[1:].hex()}'
+    for addr in validators:
         print(f'{addr} {"voted" if addr in voted else "unvoted"}{" proposer" if addr == proposer else ""}')

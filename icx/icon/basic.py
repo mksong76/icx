@@ -3,7 +3,7 @@
 import click
 
 
-from .. import service, util
+from .. import service, util, basic
 from ..cui import Header, Row, MapPrinter
 from .asset import AssetService, sum_stake
 from iconsdk.builder.call_builder import CallBuilder
@@ -13,17 +13,12 @@ from iconsdk.builder.call_builder import CallBuilder
 def show_account(addr: str):
     svc = service.get_instance()
     asset = AssetService(svc)
-    info = { 'address': addr }
-    rows = [
-        Header(lambda v: 'Basic', 5, '{}'),
-        Row(lambda v: v['address'], 42, '{}', 'Address'),
-    ]
 
-    info['balance'] = svc.get_balance(addr)
+    info, rows = basic.get_account(addr)
+
     rows += [
-        Row(lambda v: util.format_decimals(v['balance'], 3), 16, '{:>12s} ICX', 'Balance'),
+        Header(lambda v: 'ICON', 4, '{:^}'),
     ]
-
     claimable = int(asset.query_iscore(addr)['estimatedICX'], 0)
     if claimable > 0:
         info['claimable'] = claimable
@@ -44,15 +39,7 @@ def show_account(addr: str):
                 24, '{:>20s} ICX', 'Unstaking'),
         ]
 
-    if addr.startswith('cx'):
-        info['status'] = svc.get_score_status(addr)
-        rows += [
-            Header(lambda v: 'SCORE', 20, '{:^}'),
-            Row(lambda v: v['status'].get('owner',''), 42, '{:42s}', 'Owner'),
-            Row(lambda v: v['status'].get('current',{}).get('type', ''), 10, '{:10s}', 'Type'),
-            Row(lambda v: v['status'].get('current',{}).get('codeHash', ''), 66, '{:66s}', 'Code Hash'),
-        ]
-    else:
+    if not addr.startswith('cx'):
         try:
             info['prep'] = svc.call(CallBuilder().to(util.CHAIN_SCORE)
                     .method('getPRep')
