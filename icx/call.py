@@ -123,7 +123,18 @@ def call(expr: str, param: List[str], value: str = 0, keystore: str = None, raw:
 
     methods = list(filter(lambda x: x['type'] in ['function','eventlog'] and method == x['name'], api))
 
-    if len(methods) == 0:
+    if len(methods) == 0 and method == 'events':
+        if height is None:
+            blk = svc.get_block('latest')
+            height = blk['height']+1
+        event_filter = make_eventfilter(addr, None, None)
+        spec = EventMonitorSpec(height, event_filter, True)
+        monitor = svc.monitor(spec)
+        print("Waiting for events", file=sys.stderr)
+        while True:
+            obj = monitor.read()
+            dump_json(obj, flush=True)
+    elif len(methods) == 0:
         methods = list(filter(lambda x: x['type'] in ['function','eventlog'] and method in x['name'], api))
         if len(methods) == 0:
             raise Exception(f'No methods found like={method}')
