@@ -154,8 +154,12 @@ def search_prep(prep_info:dict, key: str) -> any:
     for addr, prep in prep_info.items():
         if addr == key:
             return prep
+        elif key in addr:
+            preps.append(prep)
         elif prep.get('address', '') == key:
             return prep
+        elif key in prep.get('address', ''):
+            preps.append(prep)
         elif key in prep.get('p2p', ''):
             preps.append(prep)
         elif key.lower() in prep.get('name', '').lower():
