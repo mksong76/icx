@@ -1,18 +1,16 @@
 #!/usr/bin/env python3
 
-import sys
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from os import path
 from typing import List
 
 import click
 
-from icx.cui import Column, RowPrinter
-from icx.util import datetime_from_ts, dump_json, format_dt
-
-from . import (basic, blockinterval, call, icon, rlp, scoreapi, service,
-               trace, txscan, network, wallet, blockvotes, verifytx, inspect)
+from . import (basic, blockinterval, blockvotes, btp, call, icon, inspect,
+               network, rlp, scoreapi, service, trace, txscan, verifytx,
+               wallet)
 from .config import CONTEXT_CONFIG, Config
+from .util import datetime_from_ts, format_dt
 
 CONFIG_NETWORKS='networks'
 
@@ -68,6 +66,7 @@ main.add_command(basic.get_score, 'score')
 main.add_command(basic.get_codes, 'codes')
 main.add_command(basic.show_account, 'account')
 main.add_command(trace.get_trace, 'trace')
+main.add_command(btp.main, 'btp')
 main.add_command(blockinterval.block_interval, 'interval')
 main.add_command(txscan.scan, 'txscan')
 main.add_command(rlp.rlp_endecode, 'rlp')
