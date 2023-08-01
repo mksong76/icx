@@ -112,6 +112,13 @@ def call(expr: str, param: List[str], value: str = 0, keystore: str = None, raw:
     addr = ensure_score(obj.group('address'))
 
     svc = service.get_instance()
+
+    if height is not None and height < 0:
+        blk = svc.get_block('latest')
+        height += blk['height']
+        if height < 0:
+            raise Exception(f'Invalid block height height={height}')
+
     api = svc.get_score_api(addr, height=height)
     if api is None:
         raise Exception(f'No API for {addr}')
