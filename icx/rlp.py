@@ -145,9 +145,35 @@ def encode(obj: RLPValue) -> bytes:
 @click.command(help='Decode/encode RLP bytes to/from JSON')
 @click.option('--input', '-i', type=click.File('rb'), default='-')
 @click.option('--output', '-o', type=click.File('wb'), default='-')
-@click.option('--rlp', '-r', is_flag=True)
-def convert(input: io.RawIOBase, output: io.RawIOBase, rlp: bool):
-    if rlp:
+@click.option('--encode', '-e', is_flag=True)
+def rlp_endecode(input: io.RawIOBase, output: io.RawIOBase, encode: bool):
+    if encode:
         output.write(encode(json.load(io.TextIOWrapper(input))))
     else:
         util.dump_json(decode(input),fp=io.TextIOWrapper(output))
+
+@click.command(help='Encode/decode hexadecimal from/to binary bytes')
+@click.option('--input', '-i', type=click.File('rb'), default='-')
+@click.option('--output', '-o', type=click.File('wb'), default='-')
+@click.option('--decode', '-d', is_flag=True)
+def hex_endecode(input: io.RawIOBase, output: io.RawIOBase, decode: bool):
+    if decode:
+        reader = io.TextIOWrapper(input)
+        while True:
+            line = reader.readline()
+            if not line:
+                break
+            line = line.strip()
+            if line.startswith('0x'):
+                line = line[2:]
+            bs = bytes.fromhex(line)
+            output.write(bs)
+    else:
+        writer = io.TextIOWrapper(output)
+        while True:
+            bs = input.read(1024)
+            if not bs:
+                break
+            print(bs.hex(), file=writer)
+
+
