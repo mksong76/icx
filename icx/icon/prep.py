@@ -336,7 +336,9 @@ def register_pubkey(obj: dict, pubkey: list[str]):
                 has_pubkey = rpk is not None
 
             # util.dump_json(prep)
-            click.secho(f'{prep["address"]} {"OK" if has_pubkey else "NG"}', fg='bright_green' if has_pubkey else 'white')
+            status = "OK" if has_pubkey else "NG"
+            fg_color = 'bright_green' if has_pubkey else 'white' if prep['grade'] != '0x0' else 'bright_yellow'
+            click.secho(f'{prep["address"]} {prep["name"][0:20]:20s} {status}', fg=fg_color)
         return
 
     for k in pubkey:
