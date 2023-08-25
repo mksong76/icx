@@ -1,17 +1,21 @@
 #!/usr/bin/env python3
 
+import base64
 import json
-from os import path
 import sys
-from typing import List, Union
+from hashlib import sha3_256
+from os import path
+from typing import List, Optional, Union
+
 import click
-
-from ..cui import Column, RowPrinter, Row, MapPrinter, Header
-
-from .. import service, util
-from ..network import CONTEXT_NETWORK
-from ..config import Config, CONTEXT_CONFIG
+import coincurve
 from iconsdk.builder.call_builder import CallBuilder
+from iconsdk.builder.transaction_builder import CallTransactionBuilder
+
+from .. import service, util, wallet
+from ..config import CONTEXT_CONFIG, Config
+from ..cui import Column, Header, MapPrinter, Row, RowPrinter
+from ..network import CONTEXT_NETWORK
 
 GRADE_TO_TYPE = {
     "0x0": "Main",
@@ -283,3 +287,101 @@ def handlePReps(obj: dict, store: str):
         if network in prep_seeds:
             obj[CONTEXT_PREP_SEEDS] = prep_seeds[network]
 
+def parse_str_to_bytes(s: str) -> bytes:
+    if s.startswith('0x'):
+        hs = s[2:]
+    else:
+        hs = s
+    try:
+        return bytes.fromhex(hs)
+    except:
+        pass
+    return base64.decodebytes(s.encode())
+
+def pk_to_adddress(pk: coincurve.PublicKey) -> str:
+    return f'hx{sha3_256(pk.format(compressed=False)[1:]).digest()[-20:].hex()}'
+
+def find_prep(preps: list[dict], node: str) -> Optional[dict]:
+    for prep in preps:
+        if prep['nodeAddress'] == node:
+            return prep
+    return None
+
+@click.command('regpubkey', help='Register public key of PRep')
+@click.pass_obj
+@click.argument('pubkey', nargs=-1)
+def register_pubkey(obj: dict, pubkey: list[str]):
+    svc = service.get_instance()
+
+    call = CallBuilder(to=util.CHAIN_SCORE, method='getPReps').build()
+    preps = svc.call(call)['preps']
+
+    if len(pubkey) == 0:
+        for prep in preps:
+            if int(prep['power'],0) == 0:
+                continue
+
+            if int(prep['grade'],0) > 1:
+                continue
+
+            if 'hasPublicKey' in prep:
+                has_pubkey = prep['hasPublicKey'] == '0x1'
+            else:
+                rpk = svc.call(CallBuilder(
+                    to=util.CHAIN_SCORE,
+                    method="getPRepNodePublicKey",
+                    params={"address": prep["address"]},
+
+                ).build())
+                has_pubkey = rpk is not None
+
+            # util.dump_json(prep)
+            click.secho(f'{prep["address"]} {"OK" if has_pubkey else "NG"}', fg='bright_green' if has_pubkey else 'white')
+        return
+
+    for k in pubkey:
+        bs = parse_str_to_bytes(k)
+        pk = coincurve.PublicKey(bs)
+        addr = pk_to_adddress(pk)
+        pk_bytes = pk.format()
+
+        prep = find_prep(preps, addr)
+        if prep is None:
+            click.secho(f'IGNORE {k} ({addr}) : unknown key', fg='bright_black')
+            continue
+        prep_addr = prep["address"]
+
+        if prep.get('hasPublicKey','0x0') == '0x1':
+            click.secho(f'SKIP {k} ({addr}) : already set for {prep_addr}', fg='bright_black')
+            continue
+
+        call = CallBuilder(
+            to=util.CHAIN_SCORE,
+            method="getPRepNodePublicKey",
+            params={"address": prep_addr},
+
+        ).build()
+        rpk = svc.call(call)
+        if rpk is not None:
+            rpk_bytes = parse_str_to_bytes(rpk)
+            if rpk_bytes == pk_bytes:
+                click.secho(f'SKIP {k} ({addr}) : already set for {prep_addr}', fg='bright_black')
+            else:
+                click.secho(f'ERROR {k} ({addr}) : mismatch for {prep_addr}', fg='bright_black')
+            continue
+
+        ks = wallet.get_instance()
+        register_pubkey = CallTransactionBuilder(
+                from_=ks.address,
+                to=util.CHAIN_SCORE,
+                method="registerPRepNodePublicKey",
+                nid=svc.nid,
+                params={
+                    "address": prep_addr,
+                    'pubKey': pk_bytes,
+                    }).build()
+        result = svc.estimate_and_send_tx(register_pubkey, ks)
+        if result['status'] == 1:
+            click.secho(f'SUCCESS {k} ({addr}) for {prep_addr}')
+        else:
+            click.secho(f'FAIL {k} ({addr}) for {prep_addr}', fg='bright_red')

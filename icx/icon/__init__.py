@@ -35,5 +35,6 @@ def preps(ctx: click.Context, store: str = None):
 preps.add_command(prep.set_seed)
 preps.add_command(prep.get_prep)
 preps.add_command(prep.inspect_prep)
+preps.add_command(prep.register_pubkey)
 preps.add_command(update.update_preps_json)
 preps.add_command(status.show_status)
