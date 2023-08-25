@@ -14,10 +14,15 @@ from .cui import Column, Header, MapPrinter, Row, RowPrinter
 @click.argument('addr', type=util.ADDRESS)
 @click.option('--full', type=click.BOOL, is_flag=True)
 @click.option('--height', type=util.INT)
-def get_balance(addr: str, full: bool = False, height: int = None):
+@click.option('--icx', is_flag=True)
+def get_balance(addr: str, full: bool = False, height: int = None, icx: bool = False):
     '''Get balance of the account'''
     svc = service.get_instance()
-    print(svc.get_balance(util.ensure_address(addr), height=height, full_response=full))
+    balance = svc.get_balance(util.ensure_address(addr), height=height, full_response=full)
+    if icx:
+        print(util.format_decimals(balance, 3))
+    else:
+        print(balance)
 
 
 @click.command()
