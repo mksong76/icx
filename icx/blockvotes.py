@@ -54,9 +54,10 @@ def show_validators(height: int = None):
     for v in validators:
         print(v)
 
-@click.command('vote')
+@click.command('votes')
 @click.argument('height', type=util.INT)
-def check_votes(height: int):
+@click.option('--pubkey', is_flag=True)
+def check_votes(height: int, pubkey: bool):
     '''
     Check votes of the block and show vote information
     '''
@@ -90,6 +91,11 @@ def check_votes(height: int):
         pk = coincurve.PublicKey.from_signature_and_message(sig, vote_hash, hasher=None)
         addr = f'hx{sha3_256(pk.format(compressed=False)[1:]).digest()[-20:].hex()}'
         voted.append(addr)
+        if pubkey:
+            print(f'{addr} {pk.format().hex()}')
+
+    if pubkey:
+        return
 
     validators = get_next_validators(svc, header=phdr)
     proposer = f'hx{hdr[BLOCK.PROPOSER][1:].hex()}'
