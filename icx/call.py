@@ -18,6 +18,7 @@ from .util import INT, ensure_address, dump_json, ensure_score
 
 METHOD_FMT = r'(?P<address>[a-z_0-9]+)(\.(?P<method>[a-zA-Z0-9_]+))?'
 RE_METHOD = re.compile(METHOD_FMT)
+TC_CLEAR = '\033[K'
 
 def parse_param(input: dict, param: str) -> any:
     tname: str = input['type']
@@ -135,11 +136,16 @@ def call(expr: str, param: List[str], value: str = 0, keystore: str = None, raw:
             blk = svc.get_block('latest')
             height = blk['height']+1
         event_filter = make_eventfilter(addr, None, None)
-        spec = EventMonitorSpec(height, event_filter, True)
+        spec = EventMonitorSpec(height, event_filter, True, progress_interval=10)
         monitor = svc.monitor(spec)
         print("Waiting for events", file=sys.stderr)
         while True:
             obj = monitor.read()
+            if 'progress' in obj:
+                print(f'{TC_CLEAR}> Block height={obj["progress"]}', end='\r', flush=True, file=sys.stderr)
+                continue
+            else:
+                print(f'{TC_CLEAR}', end='', flush=True, file=sys.stderr)
             dump_json(obj, flush=True)
     elif len(methods) == 0:
         methods = list(filter(lambda x: x['type'] in ['function','eventlog'] and method in x['name'], api))
