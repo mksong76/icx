@@ -1,5 +1,6 @@
 import base64
 from hashlib import sha3_256
+import sys
 from typing import Optional
 import click
 import coincurve
@@ -55,7 +56,7 @@ def show_validators(height: int = None):
         print(v)
 
 @click.command('votes')
-@click.argument('height', type=util.INT)
+@click.argument('height', type=util.INT, required=False)
 @click.option('--pubkey', is_flag=True)
 def check_votes(height: int, pubkey: bool):
     '''
@@ -63,14 +64,26 @@ def check_votes(height: int, pubkey: bool):
     '''
     svc = service.get_instance()
 
+    if height is None:
+        blk = svc.get_block('latest')
+        height = blk['height']
+        click.secho(f'Check votes for height={height}', fg='bright_black', file=sys.stderr)
+
     hdr_b64 = svc.get_block_header_by_height(height)
     hdr_bs = base64.b64decode(hdr_b64)
     hdr = rlp.decode_bytes(hdr_bs)
     hdr_hash = sha3_256(hdr_bs).digest()
 
-    votes_b64 = svc.get_votes_by_height(height)
-    votes_bs = base64.b64decode(votes_b64)
-    votes = rlp.decode_bytes(votes_bs)
+    try:
+        nhdr_bs = base64.b64decode(svc.get_block_header_by_height(height+1))
+        nhdr = rlp.decode_bytes(nhdr_bs)
+        vhash: bytes = nhdr[BLOCK.VOTES_HASH]
+        votes_bs = base64.b64decode(svc.get_data_by_hash(f'0x{vhash.hex()}'))
+        votes = rlp.decode_bytes(votes_bs)
+    except BaseException as exc:
+        votes_b64 = svc.get_votes_by_height(height)
+        votes_bs = base64.b64decode(votes_b64)
+        votes = rlp.decode_bytes(votes_bs)
 
     phdr_b64 = svc.get_block_header_by_height(height-1)
     phdr_bs = base64.b64decode(phdr_b64)
