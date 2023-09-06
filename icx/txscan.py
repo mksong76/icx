@@ -28,7 +28,7 @@ def dict_get(value: dict, keys: Union[any,list], default = None) -> any:
     return value
 
 TX_COLUMNS = {
-    'id': Column(lambda title, tx: tx['txHash'], 66, name='ID'),
+    'id': Column(lambda title, tx: dict_get(tx, 'txHash', '-'), 66, name='ID'),
     'from': Column(lambda title, tx: dict_get(tx, 'from', '-'), FULL_ADDR_LEN, name='From'),
     'from...': Column(lambda title, tx: shorten_address(dict_get(tx, 'from', '-')), SHORT_ADDR_LEN, name='From'),
     'type': Column(lambda title, tx: dict_get(tx, 'dataType', 'transfer'), 8, name='Type'),
@@ -141,5 +141,7 @@ def scan(columns: List[str], block, forward, nobase, receivers, senders, address
             #printer.print_separater()
         if forward:
             id = height+1
-        else:
+        elif height > 0:
             id = height-1
+        else:
+            break
