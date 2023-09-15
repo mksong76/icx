@@ -65,6 +65,14 @@ def get_network_info(nid: int = None, height: int = None, all: bool = False):
         ni = svc.get_btp_network_info(nid, height)
         util.dump_json(ni)
 
+@main.command('proof', help='BTP Proof')
+@click.argument('nid', metavar='<network id>', type=util.INT, required=True)
+@click.argument('height', metavar='<block height>', type=util.INT, required=True)
+def get_proof(nid: int, height: int):
+    svc = service.get_instance()
+    proof = svc.get_btp_proof(height, nid)
+    util.dump_json(proof)
+
 TC_CLEAR = '\033[K'
 
 @main.command('monitor', help='Network header monitor')
