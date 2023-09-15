@@ -136,6 +136,27 @@ class IntegerType(click.ParamType):
 
 INT = IntegerType()
 
+class DecimalType(click.ParamType):
+    name = 'int'
+    def __init__(self, symbol: str, decimal: int) -> None:
+        super().__init__()
+        self.__symbol = symbol.lower()
+        self.__mag = 10**decimal
+
+    def convert(self, value, param, ctx) -> int:
+        if isinstance(value, int):
+            return value
+        try:
+            s_value = str(value).lower()
+            if s_value.endswith(self.__symbol):
+                s_value = s_value.removesuffix(self.__symbol)
+                if '.' in s_value:
+                    return int(float(s_value)*self.__mag)
+                else:
+                    return int(s_value.replace(',', '_'), 0)*self.__mag
+        except ValueError:
+            self.fail(f'{value} is not a valid integer', param, ctx)
+
 class AddressType(click.ParamType):
     name = "address"
     def convert(self, value, param, ctx) -> str:

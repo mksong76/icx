@@ -16,7 +16,7 @@ from iconsdk.wallet.wallet import Wallet
 from .. import service
 from ..config import CONTEXT_CONFIG, Config
 from ..market import upbit
-from ..util import CHAIN_SCORE, ICX, ensure_address, format_decimals
+from ..util import CHAIN_SCORE, ICX, ensure_address, format_decimals, DecimalType
 from ..cui import Column, RowPrinter
 from ..wallet import wallet
 
@@ -405,3 +405,16 @@ def handleAssetKeyStore(obj: dict, key_store: Union[str,None] = None):
         obj[CONTEXT_ASSET] = wallet.get_instance(key_store)
     else:
         obj[CONTEXT_ASSET] = wallet.get_instance()
+
+@click.command('price')
+@click.argument('amount', type=DecimalType('icx', 18))
+@click.option('--market')
+def show_price(amount: int, market: str = None):
+    locale.setlocale(locale.LC_ALL, '')
+    try :
+        sym, price = upbit.getPrice('ICX', market)
+    except:
+        sym = 'ICX'
+        price = 1
+    value = price*amount//ICX
+    click.echo(f'{value:n} {sym}')

@@ -25,6 +25,7 @@ def assets(ctx: click.Context, key_store: str = None):
 assets.add_command(asset.show_asset)
 assets.add_command(asset.stake_auto)
 assets.add_command(asset.show_delegation)
+assets.add_command(asset.show_price)
 
 @click.group('prep', help="ICON PRep related operations")
 @click.option('--store', type=click.STRING, default=None, envvar='ICX_PREP_STORE', help='File to store PRep information')
