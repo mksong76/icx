@@ -317,6 +317,7 @@ def register_pubkey(obj: dict, pubkey: list[str]):
     preps = svc.call(call)['preps']
 
     if len(pubkey) == 0:
+        click.secho(f'{"PRep Address":42s} {"Node Address":42s} {"PRep Name":20s} {"Status"}', reverse=True)
         for prep in preps:
             if int(prep['power'],0) == 0:
                 continue
@@ -338,7 +339,7 @@ def register_pubkey(obj: dict, pubkey: list[str]):
             # util.dump_json(prep)
             status = "OK" if has_pubkey else "NG"
             fg_color = 'bright_green' if has_pubkey else 'white' if prep['grade'] != '0x0' else 'bright_yellow'
-            click.secho(f'{prep["address"]} {prep["name"][0:20]:20s} {status}', fg=fg_color)
+            click.secho(f'{prep["address"]} {prep["nodeAddress"] if prep["nodeAddress"] != prep["address"] else "":42s} {prep["name"][0:20]:20s} {status}', fg=fg_color)
         return
 
     for k in pubkey:
