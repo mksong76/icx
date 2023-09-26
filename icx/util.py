@@ -74,7 +74,7 @@ def ensure_block(id: str) -> Union[int, str]:
     elif id == 'latest':
         return id
     else:
-        id = int(id, 0)
+        id = int(id.replace(',', '_'), 0)
     return id
 
 def ensure_hash(value: str) -> str:
