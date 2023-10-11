@@ -83,14 +83,12 @@ def icon_getPRep(addr: str, server: str=None, start: int=None, end: int=None, he
     call = CallBuilder(to=util.CHAIN_SCORE, method='getPRep', params=params, height=height).build()
     return svc.call(call)
 
-def icon_getPReps(server: str = None, height: int = None) -> any:
+def icon_getPReps(server: str = None, start: int = None, height: int = None) -> any:
     svc = get_service_with_rpc(server)
-    call = CallBuilder(to=util.CHAIN_SCORE, method='getPReps', height=height).build()
-    return svc.call(call)
-
-def icon_getPRepStats(server: str = None, height: int = None) -> any:
-    svc = get_service_with_rpc(server)
-    call = CallBuilder(to=util.CHAIN_SCORE, method='getPRepStats', height=height).build()
+    params = None
+    if start is not None:
+        params = { "startRanking" : start }
+    call = CallBuilder(to=util.CHAIN_SCORE, method='getPReps', params=params, height=height).build()
     return svc.call(call)
 
 def node_inspect(server: str) -> any:
@@ -187,12 +185,22 @@ def get_prep(obj: dict, key: str, raw: bool, height: str):
     '''
     Get PRep information
     '''
-    prep_info = load_prep_store(obj[CONTEXT_PREP_STORE])
-    rpc = find_rpc(prep_info)
-    preps = icon_getPReps(rpc, height=height)['preps']
+    prep_info = None
+    try:
+        prep_info = load_prep_store(obj[CONTEXT_PREP_STORE])
+        rpc = find_rpc(prep_info)
+    except:
+        rpc = None
 
     if height is not None:
         height = int(height, 0)
+    preps = icon_getPReps(rpc, height=height)['preps']
+
+    if prep_info is None:
+        prep_info = {}
+        for prep in preps:
+            prep_info[prep['nodeAddress']] = prep
+
 
     prep_index = None
 
@@ -219,8 +227,6 @@ def get_prep(obj: dict, key: str, raw: bool, height: str):
         raise Exception(f'fail to find PRep key={key}')
 
     prep_info:dict = icon_getPRep(prep_addr, rpc, height=height)
-    prep_stats = icon_getPRepStats(rpc, height=height)['preps']
-    prep_info['stat'] = prep_stats[prep_index]
 
     if raw :
         util.dump_json(prep_info)
@@ -238,6 +244,7 @@ def get_prep(obj: dict, key: str, raw: bool, height: str):
             Row(lambda obj: obj.get('p2pEndpoint'), 40, '{}', 'P2P'),
             Row(lambda obj: PENALTY_TO_STR[obj.get('penalty')], 20, '{}', 'Penalty'),
             Row(lambda obj: STATUS_TO_STR[obj.get('status')], 20, '{}', 'Status'),
+            Row(lambda obj: int(obj.get('lastHeight'), 0), 10, '{:>}', 'LastHeight'),
             Row(lambda obj: util.format_decimals(obj.get('irep')), 40, '{:>40}', 'iRep'),
             Row(lambda obj: int(obj.get('irepUpdateBlockHeight'),0), 40, '{:>40,}', 'iRep-Height'),
             Row(lambda obj: util.format_decimals(obj.get('bonded')), 40, '{:>40}', 'Bonded'),
@@ -245,12 +252,6 @@ def get_prep(obj: dict, key: str, raw: bool, height: str):
             Row(lambda obj: util.format_decimals(obj.get('power')), 40, '{:>40}', 'Power'),
             Row(lambda obj: int(obj.get('totalBlocks'),0), 40, '{:>40,}', 'Total Blocks'),
             Row(lambda obj: int(obj.get('validatedBlocks'),0), 40, '{:>40,}', 'Validated Blocks'),
-            Header(lambda obj: "Statics", 40, '{}'),
-            Row(lambda obj: STATE_TO_STR[obj['stat']['lastState']], 20, '{:>20}', 'Last State'),
-            Row(lambda obj: int(obj['stat']['lastHeight'], 0), 32, '({0:#x}) {0:>,}', 'Last Height'),
-            Row(lambda obj: int(obj['stat']['realFailCont'], 0), 20, '{:>20,}', 'Continuous Failure'),
-            Row(lambda obj: int(obj['stat']['realFail'], 0), 20, '{:>20,}', 'Validation Failure'),
-            Row(lambda obj: int(obj['stat']['realTotal'], 0), 20, '{:>20,}', 'Validation Oppitunity'),
         ]).print_header().print_data(prep_info).print_separater()
 
 @click.command("inspect")
