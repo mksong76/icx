@@ -389,3 +389,46 @@ def register_pubkey(obj: dict, pubkey: list[str]):
             click.secho(f'SUCCESS {k} ({addr}) for {prep_addr}')
         else:
             click.secho(f'FAIL {k} ({addr}) for {prep_addr}', fg='bright_red')
+
+def as_bool(v: Optional[str]) -> str:
+    return "None" if v is None else "Yes" if int(v, 0) else "No"
+def as_int(v: Optional[str]) -> int:
+    return None if v is None else int(v, 0)
+
+cols_of_list = [
+    Column(lambda n, p: n, 3, "{:3d}", "NO" ),
+    Column(lambda n, p: GRADE_TO_TYPE[p['grade']], 4, "{:>4s}", "Type" ),
+    Column(lambda n, p: p.get('name', '')[:18], 18, "{:<18s}", "Name" ),
+    Column(lambda n, p: p.get('country', '')[:3], 3, "{:<3s}", "C.C" ),
+    Column(lambda n, p: util.format_decimals(int(p['power'],0)//10**3,0)+'k', 15, "{:>15s}", "Power" ),
+    Column(lambda n, p: STATUS_TO_STR[p['status']][:10], 10, "{:^10s}", "Status" ),
+    Column(lambda n, p: as_bool(p['hasPublicKey']), 4, "{:<4s}", "Pub" ),
+    Column(lambda n, p: as_int(p['lastHeight']), 10, "{:>10d}", "Last BH" ),
+]
+@click.command('list')
+@click.option('--height', type=util.INT)
+@click.option("--raw", is_flag=True)
+def list_preps(height: int = None, raw: bool = False):
+    res = icon_getPReps(None, height=height)
+    if raw:
+        util.dump_json(res)
+        return
+    preps = res['preps']
+    bh = as_int(res['blockHeight'])
+    printer = RowPrinter(cols_of_list)
+    printer.print_header()
+    idx = 0
+    for prep in preps:
+        idx += 1
+        if prep['grade'] == "0x2" and prep['power'] == '0x0':
+            continue
+
+        kwargs = {}
+        type = GRADE_TO_TYPE[prep['grade']]
+        if type == 'Cand':
+            kwargs['fg'] = 'bright_red'
+            kwargs['bold'] = True
+        elif type == 'Main':
+            kwargs['fg'] = 'bright_blue'
+        prep['lastDuration'] = (bh - as_int(prep['lastHeight']))*2
+        printer.print_data(idx, prep, **kwargs)
