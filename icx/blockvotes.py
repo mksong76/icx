@@ -46,12 +46,16 @@ def get_next_validators(svc: service.Service = None, header: list = None, height
     validators_b64 = svc.get_data_by_hash(f'0x{validators_hash.hex()}')
     validators_bs = base64.b64decode(validators_b64)
     validators = rlp.decode_bytes(validators_bs)
-    return list(map(lambda v: f'hx{v[1:].hex()}', validators))
+    return height, list(map(lambda v: f'hx{v[1:].hex()}', validators))
 
 @click.command('validators')
 @click.option('--height', '-h', type=util.INT)
 def show_validators(height: int = None):
-    validators = get_next_validators(height = height)
+    '''
+    Show next validators of the specified block
+    '''
+    height, validators = get_next_validators(height = height)
+    click.secho(f'Next validators of the block height={height}', fg='bright_black', file=sys.stderr)
     for v in validators:
         print(v)
 

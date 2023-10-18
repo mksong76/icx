@@ -304,9 +304,11 @@ class NetworkInformation:
                 problem = id_problem or problems.get(p2p)
                 color = problem.color if problem is not None else None
                 if node.has_inspection(self.cid):
-                    status = "verified"
+                    status = click.style("verified",fg='bright_green')
                 else:
-                    status = " ".join(list(map(lambda x:x.get_p2p(),nr[1:])))
+                    status = click.style(f'{problem[1]} ', fg=problem[0]) \
+                        if problem is not None else ''
+                    status += click.style(f'{len(nr[1:])} reports', fg='bright_white')
                 click.secho(f'{id:<42s} : {p2p:<24s} : {status}', fg=color)
                 id = ''
 
@@ -342,12 +344,15 @@ def inspect_url_of(server: str = None, rpc: str = None, channel: str = None, inf
 @click.option('--informal', is_flag=True)
 @click.pass_obj
 def show_inspection(obj: dict, server: str = None, rpc: str = None, channel: str = None, informal: bool = False):
+    '''
+    Inspect the channel of the server
+    '''
     url = inspect_url_of(server, rpc, channel, informal).geturl()
     try:
         inspection = util.rest_get(url)
     except BaseException as exc:
         raise Exception(f'Inspection failure url={url}') from exc
-    print(json.dumps(inspection))
+    util.dump_json(inspection)
 
 @click.command('netinspect')
 @click.option('--rpc', type=click.STRING)
@@ -356,6 +361,9 @@ def show_inspection(obj: dict, server: str = None, rpc: str = None, channel: str
 @click.option('--private', is_flag=True)
 @click.pass_obj
 def show_netinspection(obj: dict, server: str = None, rpc: str = None, channel: str = None, private: bool = False):
+    '''
+    Inspect the channel of the all nodes connected with the server
+    '''
     url_obj = inspect_url_of(server, rpc, channel)
     uri_obj = url_obj._replace(path="")
     url = url_obj.geturl()

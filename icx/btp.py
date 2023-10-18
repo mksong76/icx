@@ -11,6 +11,9 @@ from . import service, util
 
 @click.group('btp')
 def main():
+    '''
+    BTP Block related operations
+    '''
     pass
 
 @main.command('header', help='Show BTP Header')

@@ -53,6 +53,11 @@ def show_status(obj: dict, version: str, timeout: float):
     iiss_info = svc.call(CallBuilder(to=CHAIN_SCORE, method="getIISSInfo").build())
     next_term = int(iiss_info['nextPRepTerm'], 0)
 
+    net_info = svc.call(CallBuilder(to=CHAIN_SCORE, method="getNetworkInfo").build())
+    main_preps = int(net_info['mainPRepCount'], 0)
+    sub_preps = int(net_info['subPRepCount'], 0)
+    total_preps = main_preps+sub_preps
+
     #-------------------------------------------------------------------------------
     #   현재의 prep정보(등급)을 가지고 있습니다.
     #
@@ -158,7 +163,6 @@ def show_status(obj: dict, version: str, timeout: float):
     idx=0
     late_nodes=0
     updated_main=0
-    updated_in22=0
     updated_nodes=0
     all_nodes=0
     main_nodes=0
@@ -172,7 +176,7 @@ def show_status(obj: dict, version: str, timeout: float):
         if item.prep['type'] == 'Main':
             format = MAIN_FORMAT
             main_nodes += 1
-        elif item.prep['type'] == 'Cand' and has_power and idx < 100:
+        elif item.prep['type'] == 'Cand' and has_power and idx < total_preps:
             format = CAND_FORMAT
         else:
             if has_power:
@@ -200,8 +204,6 @@ def show_status(obj: dict, version: str, timeout: float):
                 updated_nodes+=1
                 if item.prep['type'] == 'Main':
                     updated_main += 1
-                if idx < 22:
-                    updated_in22 += 1
 
             if 'height' in item.chain and 'state' in item.chain:
                 height = item.chain['height']
@@ -223,6 +225,12 @@ def show_status(obj: dict, version: str, timeout: float):
     format+=' | NextTerm: %d / %s'
     args+=(next_term, str(time_next.strftime('%H:%M:%S')))
     if version_check is not None:
-        format+=' | %s Updated: %d(22) / %d(%d) / %d(%d)'
-        args+=(version_check, updated_in22, updated_main, main_nodes, updated_nodes, all_nodes)
+        update_status = 'Safe'
+        if updated_main < main_nodes*1/3:
+            update_status = 'Minor'
+        elif updated_main < main_nodes*2/3:
+            update_status = 'Unsafe'
+
+        format+=' | %s Updated: %d(%d) / %d(%d) / %s'
+        args+=(version_check, updated_main, main_nodes, updated_nodes, all_nodes, update_status)
     click.secho(f' {(format%args):95s} ', reverse=True, bold=True)
