@@ -30,7 +30,7 @@ class VOTEITEM:
     TIMESTAMP = 0
     SIGNATURE = 1
 
-def get_next_validators(svc: service.Service = None, header: list = None, height: int = None):
+def get_next_validators(svc: service.Service = None, /, header: list = None, height: int = None):
     if svc is None:
         svc = service.get_instance()
 
@@ -46,7 +46,7 @@ def get_next_validators(svc: service.Service = None, header: list = None, height
     validators_b64 = svc.get_data_by_hash(f'0x{validators_hash.hex()}')
     validators_bs = base64.b64decode(validators_b64)
     validators = rlp.decode_bytes(validators_bs)
-    return height, list(map(lambda v: f'hx{v[1:].hex()}', validators))
+    return list(map(lambda v: f'hx{v[1:].hex()}', validators)), height
 
 @click.command('validators')
 @click.option('--height', '-h', type=util.INT)
@@ -54,7 +54,7 @@ def show_validators(height: int = None):
     '''
     Show next validators of the specified block
     '''
-    height, validators = get_next_validators(height = height)
+    validators, height = get_next_validators(height = height)
     click.secho(f'Next validators of the block height={height}', fg='bright_black', file=sys.stderr)
     for v in validators:
         print(v)
@@ -71,7 +71,7 @@ def check_votes(height: int, pubkey: bool):
     if height is None:
         blk = svc.get_block('latest')
         height = blk['height']
-        click.secho(f'Check votes for height={height}', fg='bright_black', file=sys.stderr)
+    click.secho(f'Check votes for height={height}', fg='bright_black', file=sys.stderr)
 
     hdr_b64 = svc.get_block_header_by_height(height)
     hdr_bs = base64.b64decode(hdr_b64)
@@ -114,7 +114,7 @@ def check_votes(height: int, pubkey: bool):
     if pubkey:
         return
 
-    validators = get_next_validators(svc, header=phdr)
+    validators, _ = get_next_validators(svc, header=phdr)
     proposer = f'hx{hdr[BLOCK.PROPOSER][1:].hex()}'
     for addr in validators:
         print(f'{addr} {"voted" if addr in voted else "unvoted"}{" proposer" if addr == proposer else ""}')
