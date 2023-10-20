@@ -15,6 +15,7 @@ from iconsdk.builder.transaction_builder import CallTransactionBuilder
 from .. import service, util, wallet
 from ..config import CONTEXT_CONFIG, Config
 from ..cui import Column, Header, MapPrinter, Row, RowPrinter
+from ..icon import duration
 from ..network import CONTEXT_NETWORK
 
 GRADE_TO_TYPE = {
@@ -395,32 +396,37 @@ def as_bool(v: Optional[str]) -> str:
 def as_int(v: Optional[str]) -> int:
     return None if v is None else int(v, 0)
 
-cols_of_list = [
+PREP_COLUMNS = [
     Column(lambda n, p: n, 3, "{:3d}", "NO" ),
     Column(lambda n, p: GRADE_TO_TYPE[p['grade']], 4, "{:>4s}", "Type" ),
     Column(lambda n, p: p.get('name', '')[:18], 18, "{:<18s}", "Name" ),
     Column(lambda n, p: p.get('country', '')[:3], 3, "{:<3s}", "C.C" ),
-    Column(lambda n, p: util.format_decimals(int(p['power'],0)//10**3,0)+'k', 15, "{:>15s}", "Power" ),
-    Column(lambda n, p: STATUS_TO_STR[p['status']][:10], 10, "{:^10s}", "Status" ),
+    Column(lambda n, p: util.format_decimals(int(p['power'],0)//10**3,0)+'k', 12, "{:>12s}", "Power" ),
+    Column(lambda n, p: util.format_decimals(int(p['delegated'],0)//10**3,0)+'k', 12, "{:>12s}", "Delegated" ),
     Column(lambda n, p: as_bool(p['hasPublicKey']), 4, "{:<4s}", "Pub" ),
     Column(lambda n, p: as_int(p['lastHeight']), 10, "{:>10d}", "Last BH" ),
+    Column(lambda n, p: duration.secs_to_str(p['lastDuration'], sep=' '), 10, "{:>10s}", "Since" ),
 ]
 @click.command('list')
 @click.option('--height', type=util.INT)
+@click.option('--all', is_flag=True)
 @click.option("--raw", is_flag=True)
-def list_preps(height: int = None, raw: bool = False):
+def list_preps(height: int = None, raw: bool = False, all: bool = False):
     res = icon_getPReps(None, height=height)
     if raw:
         util.dump_json(res)
         return
     preps = res['preps']
     bh = as_int(res['blockHeight'])
-    printer = RowPrinter(cols_of_list)
+    printer = RowPrinter(PREP_COLUMNS)
     printer.print_header()
     idx = 0
+    main_count = 0
+    sub_count = 0
+    cand_count = 0
     for prep in preps:
         idx += 1
-        if prep['grade'] == "0x2" and prep['power'] == '0x0':
+        if prep['grade'] == "0x2" and prep['power'] == '0x0' and not all:
             continue
 
         kwargs = {}
@@ -428,7 +434,15 @@ def list_preps(height: int = None, raw: bool = False):
         if type == 'Cand':
             kwargs['fg'] = 'bright_red'
             kwargs['bold'] = True
+            cand_count += 1
         elif type == 'Main':
             kwargs['fg'] = 'bright_blue'
+            main_count += 1
+        else:
+            sub_count += 1
         prep['lastDuration'] = (bh - as_int(prep['lastHeight']))*2
         printer.print_data(idx, prep, **kwargs)
+    printer.print_row([
+        (1, f'{len(preps):>3d}'),
+        (printer.columns-1, f'Main:{main_count} Sub:{sub_count} Cand:{cand_count}'),
+    ], reverse=True)

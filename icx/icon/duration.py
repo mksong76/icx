@@ -23,6 +23,38 @@ def time_to_ms(s: str) -> float:
         ts += float(micro)/1000
     return ts
 
+time_modulators = [
+    (1000,'µs'),
+    (1000,'ms'),
+    (60,'s'),
+    (60,'m'),
+    (24,'h'),
+    (0,'d'),
+]
+
+def int_to_str_with_modulators(s: int, modulators: list, sep: str = '') -> str:
+    ret = []
+    for mod in modulators:
+        if s == 0:
+            if len(ret) == 0:
+                ret.append(f'0{mod[1]}')
+            break
+        if mod[0] == 0:
+            ret.append(f'{s}{mod[1]}')
+            break
+        v = s%mod[0]
+        if v > 0:
+            ret.append(f'{v}{mod[1]}')
+        s = s//mod[0]
+    ret.reverse()
+    ret = ret[:2]
+    return sep.join(ret)
+
+def secs_to_str(s: int, /, **kwargs) -> str:
+    if s<0:
+        return '-'+secs_to_str(-s, **kwargs)
+    return int_to_str_with_modulators(s, time_modulators[2:], **kwargs)
+
 if __name__ == "__main__":
     for arg in sys.argv[1:]:
         print(time_to_ms(arg))

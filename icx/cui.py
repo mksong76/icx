@@ -78,6 +78,25 @@ class RowPrinter:
         format_str = '| ' + ' | '.join(formats) + ' |'
         click.secho(format_str.format(*data), file=self.__file, **kwargs)
 
+    def print_row(self, cols: list[tuple[int,any]], **kwargs):
+        formats = []
+        values = []
+        spanned = 0
+        idx = 0
+        for size, value in cols:
+            spanned = 0
+            for i in range(size):
+                c = self.__columns[i+idx]
+                spanned += c.size+3
+            idx += size
+            formats.append(f'{{:{spanned-3}}}')
+            values.append(value)
+        format_str = '| ' + ' | '.join(formats) + ' |'
+        click.secho(format_str.format(*values), file=self.__file, **kwargs)
+
+    @property
+    def columns(self) -> int:
+        return len(self.__columns)
 
 class Row(Column):
     pass
