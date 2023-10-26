@@ -6,7 +6,9 @@ from typing import List
 
 import click
 
-from . import service, util
+from iconsdk.builder.transaction_builder import DeployTransactionBuilder
+
+from . import service, util, wallet
 from .cui import Column, Header, MapPrinter, Row, RowPrinter
 
 
@@ -153,3 +155,59 @@ def show_account(addr: str):
     info, rows = get_account(addr)
     rows.append(Header(lambda v: 'END', 3, '{:^}'))
     MapPrinter(rows).print_data(info)
+
+@click.command('deploy', help='Deploy contract')
+@click.option('--to', metavar='<to>', type=util.ADDRESS)
+@click.option('--value', metavar='<value>', type=util.INT)
+@click.option('--type', metavar='<contract type>', type=click.STRING)
+@click.argument('score', metavar='<score file>', type=click.STRING)
+@click.argument('params', metavar='<key=value>', type=click.STRING, nargs=-1)
+def deploy_contract(score: str, params: list[str], *, type: str = None, to: str = None, value: int = None):
+    '''
+    Deploy or update the contract
+    '''
+    with open(score, 'rb') as fd:
+        data = []
+        while True:
+            bs = fd.read()
+            if not bs:
+                break
+            data.append(bs.hex())
+        content = '0x'+(''.join(data))
+
+    if type is None:
+        if score.lower().endswith('.jar') :
+            type = 'application/java'
+        else:
+            type = 'application/zip'
+
+    mw = wallet.get_instance()
+    svc = service.get_instance()
+
+    if len(params) > 0:
+        parameters = {}
+        for param in params:
+            idx = param.index('=')
+            if idx<0:
+                raise Exception('Invalid parameter (ex: <key>=<value>)')
+            key = param[0:idx]
+            value = param[idx+1:]
+            parameters[key] = value if value != 'null' else None
+    else:
+        parameters = None
+
+    builder = DeployTransactionBuilder(
+        version=3,
+        nid=svc.nid,
+        from_=mw.address,
+        content_type=type,
+        content=content,
+        params=parameters,
+        to=to if to is not None else 'cx0000000000000000000000000000000000000000'
+    )
+    if value is not None:
+        builder = builder.value(value)
+
+    tx = builder.build()
+    result = svc.estimate_and_send_tx(tx, mw)
+    util.dump_json(result)
