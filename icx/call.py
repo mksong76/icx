@@ -102,7 +102,7 @@ def parse_output(outputs: list, output: any) -> any:
 @click.option('--step_limit', '-s', type=INT, help="Step limit")
 @click.option('--height', '-h', type=INT, default=None, help="Block height for query")
 @click.option('--raw', '-r', is_flag=True)
-def call(expr: str, param: List[str], value: str = 0, keystore: str = None, raw: bool = False, step_limit: int = None, height: int = None):
+def call(expr: str, param: List[str], value: int = 0, keystore: str = None, raw: bool = False, step_limit: int = None, height: int = None):
     '''
     Call method of the contract
     '''
