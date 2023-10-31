@@ -11,6 +11,8 @@ def type_to_str(item: dict) -> str:
     if 'name' in item:
         if 'default' in item:
             result = click.style(item['name'], dim=True)+":"
+        elif 'indexed' in item:
+            result = click.style(item['name'], fg='bright_yellow')+":"
         else:
             result = f'{item["name"]}:'
     tn: str = item['type']
