@@ -68,7 +68,7 @@ def get_data(hash: List[str], binary: bool, out: io.RawIOBase):
     for id in hash:
         data = svc.get_data_by_hash(util.ensure_hash(id))
         if binary:
-            out.write(base64.decodestring(data.encode()))
+            out.write(base64.decodebytes(data.encode()))
         else:
             util.dump_json(data, fp=io.TextIOWrapper(out))
 
