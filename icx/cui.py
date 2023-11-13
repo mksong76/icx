@@ -9,12 +9,27 @@ import click
 class Column:
     def __init__(self, get_value, size: int, format: str = None, name: str = '') -> None:
         self.__get_value = get_value
+        size = max(size, len(name))
         self.__size = size
-        self.__format = format if format is not None else f'{{:{size}}}'
+        if format is None:
+            self.__format = f'{{:{size}.{size}}}'
+        elif '>' in format:
+            self.__format = f'{{:>{size}.{size}}}'
+        elif '^' in format:
+            self.__format = f'{{:^{size}.{size}}}'
+        else:
+            self.__format = f'{{:<{size}.{size}}}'
+        self.__value_format = format
         self.__name = name
 
     def get_value(self, *args) -> any:
         return self.__get_value(*args)
+
+    def get_str(self, *args) -> str:
+        if self.__value_format is not None:
+            return self.__value_format.format(self.__get_value(*args))
+        else:
+            return self.__get_value(*args)
 
     @property
     def size(self):
@@ -38,18 +53,11 @@ class RowPrinter:
             formats.append(column.format)
             seps.append('-'*column.size)
             names.append(column.name)
-            if '>' in column.format:
-                hdr_formats.append(f'{{:>{column.size}}}')
-            elif '^' in column.format:
-                hdr_formats.append(f'{{:^{column.size}}}')
-            else:
-                hdr_formats.append(f'{{:{column.size}}}')
         self.__columns = columns
         self.__file = file
         self.__format_str = '| ' + ' | '.join(formats) + ' |'
         self.__sep_str = '+-' + '-+-'.join(seps) + '-+'
-        hdr_fmt = '| ' + ' | '.join(hdr_formats) + ' |'
-        self.__header = hdr_fmt.format(*names)
+        self.__header = self.__format_str.format(*names)
 
     def print_header(self, **kwargs):
         click.secho(self.__header, reverse=True, file=self.__file, **kwargs)
@@ -60,7 +68,7 @@ class RowPrinter:
     def print_data(self, *args, **kwargs):
         values = []
         for column in self.__columns:
-            values.append(column.get_value(*args))
+            values.append(column.get_str(*args))
         click.secho(self.__format_str.format(*values), file=self.__file, **kwargs)
 
     def print_spanned(self, idx: int, size: int, data: List[any], **kwargs):
@@ -139,11 +147,14 @@ class MapPrinter:
 
     def print_data(self, *args, **kwargs) -> 'MapPrinter':
         for row in self.__rows:
-            value = row.get_value(*args)
+            value = row.get_str(*args)
             row_format = row.format
             if '>' in row_format:
                 format_str = self.__format_right
                 value_str = row_format.format(value)[-row.size:]
+            elif '^' in row_format:
+                format_str = self.__format_center
+                value_str = row_format.format(value)[:row.size]
             else:
                 format_str = self.__format_left
                 value_str = row_format.format(value)[:row.size]
