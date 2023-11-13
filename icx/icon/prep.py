@@ -5,7 +5,7 @@ import json
 import sys
 from hashlib import sha3_256
 from os import path
-from typing import List, Optional, Union
+from typing import Any, List, Optional, Union
 
 import click
 import coincurve
@@ -14,8 +14,7 @@ from iconsdk.builder.transaction_builder import CallTransactionBuilder
 
 from .. import service, util, wallet
 from ..config import CONTEXT_CONFIG, Config
-from ..cui import Column, Header, MapPrinter, Row, RowPrinter
-from ..icon import duration
+from ..cui import Column, MapPrinter, Row, RowPrinter
 from ..network import CONTEXT_NETWORK
 
 GRADE_TO_TYPE = {
@@ -101,6 +100,57 @@ def node_get_chain(server: str, timeout: float = 1.0) -> any:
 def node_get_version(server: str, timeout: float = 1.0) -> any:
     si = util.rest_get(f'http://{server}/admin/system', timeout=timeout)
     return si['buildVersion']
+
+class PRep(dict):
+    TMain = 'Main'
+    TSub = 'Sub'
+    TCand = 'Cand'
+
+    def __new__(cls, *args: Any, **kwargs: Any) -> 'PRep':
+        return super().__new__(cls, *args, **kwargs)
+
+    def get_int(self, key: any) -> int:
+        return int(self.get(key, '0'), 0)
+    
+    @property
+    def grade(self) -> str:
+        return GRADE_TO_TYPE[self.get('grade')]
+    
+    @property
+    def power(self) -> int:
+        return self.get_int('power')
+
+    @property
+    def bonded(self) -> int:
+        return self.get_int('bonded')
+    
+    @property
+    def bond_rate(self) -> float:
+        return self.bonded*20/(self.bonded+self.delegated)
+    
+    @property
+    def voter_rate(self) -> float:
+        return self.get_voter_rate(1000)
+    
+    COMMISSION_BASE = 10000
+    def get_voter_rate(self, delegation: int) -> float:
+        voterRate = self.COMMISSION_BASE-self.commission_rate
+        voted = self.bonded+self.delegated+delegation
+        power = min(self.bonded*20, voted)
+        return power*voterRate/voted/self.COMMISSION_BASE
+
+    @property
+    def delegated(self) -> int:
+        return self.get_int('delegated')
+
+    @property
+    def commission_rate(self) -> int:
+        return self.get_int('commission_rate')
+    
+    @property
+    def delegation_required(self) -> int:
+        return self.delegated-(self.bonded*19)
+
 
 @click.command('seeds')
 @click.pass_obj
@@ -240,7 +290,7 @@ def get_prep(obj: dict, key: str, raw: bool, height: str):
             Row(lambda obj: obj.get('email'), 40, '{}', 'Email'),
             Row(lambda obj: obj.get('details'), 60, '{}', 'Details'),
             Row(lambda obj: obj.get('website'), 60, '{}', 'WebSite'),
-            Row(lambda obj: GRADE_TO_TYPE[obj.get('grade')], 4, '{}', 'Grade'),
+            Row(lambda obj: obj.grade, 4, '{}', 'Grade'),
             Row(lambda obj: obj.get('nodeAddress'), 42, '{}', 'Node'),
             Row(lambda obj: obj.get('p2pEndpoint'), 40, '{}', 'P2P'),
             Row(lambda obj: PENALTY_TO_STR[obj.get('penalty')], 20, '{}', 'Penalty'),
@@ -248,12 +298,12 @@ def get_prep(obj: dict, key: str, raw: bool, height: str):
             Row(lambda obj: int(obj.get('lastHeight'), 0), 10, '{:>}', 'LastHeight'),
             Row(lambda obj: util.format_decimals(obj.get('irep')), 40, '{:>40}', 'iRep'),
             Row(lambda obj: int(obj.get('irepUpdateBlockHeight'),0), 40, '{:>40,}', 'iRep-Height'),
-            Row(lambda obj: util.format_decimals(obj.get('bonded')), 40, '{:>40}', 'Bonded'),
-            Row(lambda obj: util.format_decimals(obj.get('delegated')), 40, '{:>40}', 'Delegated'),
-            Row(lambda obj: util.format_decimals(obj.get('power')), 40, '{:>40}', 'Power'),
-            Row(lambda obj: int(obj.get('totalBlocks'),0), 40, '{:>40,}', 'Total Blocks'),
-            Row(lambda obj: int(obj.get('validatedBlocks'),0), 40, '{:>40,}', 'Validated Blocks'),
-        ]).print_header().print_data(prep_info).print_separater()
+            Row(lambda obj: util.format_decimals(obj.bonded), 40, '{:>40}', 'Bonded'),
+            Row(lambda obj: util.format_decimals(obj.delegated), 40, '{:>40}', 'Delegated'),
+            Row(lambda obj: util.format_decimals(obj.power), 40, '{:>40}', 'Power'),
+            Row(lambda obj: obj.get_int('totalBlocks'), 40, '{:>40,}', 'Total Blocks'),
+            Row(lambda obj: obj.get_int('validatedBlocks'), 40, '{:>40,}', 'Validated Blocks'),
+        ]).print_header().print_data(PRep(prep_info))
 
 @click.command("inspect")
 @click.pass_obj
@@ -393,54 +443,66 @@ def register_pubkey(obj: dict, pubkey: list[str]):
 
 def as_bool(v: Optional[str]) -> str:
     return "None" if v is None else "Yes" if int(v, 0) else "No"
-def as_int(v: Optional[str]) -> int:
-    return None if v is None else int(v, 0)
+def as_int(v: Optional[str], d: Optional[int] = None) -> Optional[int]:
+    return d if v is None else int(v, 0)
 
 PREP_COLUMNS = [
     Column(lambda n, p: n, 3, "{:3d}", "NO" ),
-    Column(lambda n, p: GRADE_TO_TYPE[p['grade']], 4, "{:>4s}", "Type" ),
-    Column(lambda n, p: p.get('name', '')[:18], 18, "{:<18s}", "Name" ),
-    Column(lambda n, p: p.get('country', '')[:3], 3, "{:<3s}", "C.C" ),
-    Column(lambda n, p: util.format_decimals(int(p['power'],0)//10**3,0)+'k', 12, "{:>12s}", "Power" ),
-    Column(lambda n, p: util.format_decimals(int(p['delegated'],0)//10**3,0)+'k', 12, "{:>12s}", "Delegated" ),
-    Column(lambda n, p: as_bool(p['hasPublicKey']), 4, "{:<4s}", "Pub" ),
-    Column(lambda n, p: as_int(p['lastHeight']), 10, "{:>10d}", "Last BH" ),
-    Column(lambda n, p: duration.secs_to_str(p['lastDuration'], sep=' '), 10, "{:>10s}", "Since" ),
+    Column(lambda n, p: p.grade, 4, "{:<4.4s}", "Type" ),
+    Column(lambda n, p: p.get('name', ''), 18, "{:<18.18s}", "Name" ),
+    Column(lambda n, p: p.get('country', ''), 3, "{:<3.3s}", "C.C" ),
+    Column(lambda n, p: p.power//10**21, 12, "{:>11,d}k", "Power"),
+    Column(lambda n, p: p.bond_rate*100, 7, "{:>6.2f}%", "Bond %"),
+    Column(lambda n, p: p.get_voter_rate(1000)*100, 7, "{:>6.2f}%", "Voter %"),
+    Column(lambda n, p: p.delegation_required//10**21, 12, "{:>11,d}k", "Delegation"),
+    Column(lambda n, p: p.commission_rate/100, 10, "{:>9.2f}%", 'Commission'),
 ]
 @click.command('list')
-@click.option('--height', type=util.INT)
-@click.option('--all', is_flag=True)
-@click.option("--raw", is_flag=True)
-def list_preps(height: int = None, raw: bool = False, all: bool = False):
+@click.option('--height', type=util.INT, help='Height for the block to call getPReps()')
+@click.option('--all', is_flag=True, help='List all (including candidates, no power)')
+@click.option("--raw", is_flag=True, help='Raw JSON output')
+@click.option('--addr', is_flag=True, help='Include address of PRep')
+@click.option('--voter', is_flag=True, help='Sort by voter power')
+def list_preps(height: int = None, raw: bool = False, all: bool = False, addr: bool = False, voter: bool = False):
+    '''
+    List PReps
+    '''
     res = icon_getPReps(None, height=height)
     if raw:
         util.dump_json(res)
         return
-    preps = res['preps']
+    preps: list[PRep] = list(map(lambda x: PRep(x), res['preps']))
     bh = as_int(res['blockHeight'])
-    printer = RowPrinter(PREP_COLUMNS)
+    columns = PREP_COLUMNS
+    if addr:
+        columns = columns[:]
+        columns.insert(3, Column(lambda n, p: p.get('address'), 42, '{:42s}', 'Address'))
+    printer = RowPrinter(columns)
     printer.print_header()
     idx = 0
     main_count = 0
     sub_count = 0
     cand_count = 0
+    if voter:
+        preps.sort(key=lambda x: (x.voter_rate, -x.delegation_required), reverse=True)
     for prep in preps:
         idx += 1
-        if prep['grade'] == "0x2" and prep['power'] == '0x0' and not all:
-            continue
+        grade = prep.grade
 
         kwargs = {}
-        type = GRADE_TO_TYPE[prep['grade']]
-        if type == 'Cand':
+        if grade == PRep.TCand:
             kwargs['fg'] = 'bright_red'
             kwargs['bold'] = True
             cand_count += 1
-        elif type == 'Main':
+        elif grade == PRep.TMain:
             kwargs['fg'] = 'bright_blue'
             main_count += 1
         else:
             sub_count += 1
-        prep['lastDuration'] = (bh - as_int(prep['lastHeight']))*2
+
+        if grade == PRep.TCand and prep.power == 0 and not all:
+            continue
+
         printer.print_data(idx, prep, **kwargs)
     printer.print_row([
         (1, f'{len(preps):>3d}'),

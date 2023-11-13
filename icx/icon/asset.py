@@ -19,6 +19,7 @@ from ..market import upbit
 from ..util import CHAIN_SCORE, ICX, ensure_address, format_decimals, DecimalType
 from ..cui import Column, RowPrinter
 from ..wallet import wallet
+from .prep import PRep
 
 CONFIG_STAKE_TARGETS = "target_balances"
 CONFIG_SUPPORTING_PREPS = "supporting_preps"
@@ -382,23 +383,29 @@ def show_delegation(ctx: dict):
     service = AssetService()
     wallet: Wallet = ctx[CONTEXT_ASSET]
     delegations = service.get_delegation(wallet.get_address())
-    call = CallBuilder(to=CHAIN_SCORE, method='getPReps').build()
-
-    prep_info = service.service.call(call)
+    prep_info = service.service.call(CallBuilder(to=CHAIN_SCORE, method='getPReps').build())
     prep_map = {}
     for prep in prep_info['preps']:
         prep_map[prep['address']] = prep
 
-    print(f'[#] ADDRESS       : {wallet.get_address()}')
+    columns = [
+        Column(lambda e, p: p['name'], 16, '{:<16.16s}', "Name"),
+        Column(lambda e, p: e['address'], 42, '{:42s}', "Address"),
+        Column(lambda e, p: p.commission_rate/100, 7, '{:>6.2f}%', "Comm %"),
+        Column(lambda e, p: p.voter_rate*100, 7, '{:>6.2f}%', "Voter %"),
+        Column(lambda e, p: format_decimals(p.delegation_required,3), 16, '{:>16}', "Delegation Req"),
+        Column(lambda e, p: format_decimals(e['value'],3), 16, '{:>16s}', "Delegation"),
+    ]
+
+    p = RowPrinter(columns)
+    p.print_row([
+        (1, 'Wallet'),
+        (p.columns-1, wallet.get_address())
+    ], reverse=True, underline=True)
+    p.print_header()
     for entry in delegations['delegations']:
-        address = entry["address"]
-        if address in prep_map:
-            prep = prep_map[address]
-            name = prep["name"]
-        else:
-            name = address
-        value = int(entry["value"], 0)
-        print(f'[#] {name[:20]:20} {address} : {format_decimals(value,3):>16s} ')
+        prep = PRep(prep_map[entry['address']])
+        p.print_data(entry, prep, underline=True)
 
 def handleAssetKeyStore(obj: dict, key_store: Union[str,None] = None):
     if key_store is not None:
