@@ -2,22 +2,21 @@
 
 import locale
 import sys
-from audioop import add
-from cProfile import label
 from datetime import timedelta
-from typing import List, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
 import click
 from iconsdk.builder.call_builder import CallBuilder
 from iconsdk.builder.transaction_builder import CallTransactionBuilder
-from iconsdk.icon_service import SignedTransaction, Transaction
 from iconsdk.wallet.wallet import Wallet
 
-from .. import service
+from .. import basic, service
 from ..config import CONTEXT_CONFIG, Config
 from ..market import upbit
 from ..util import CHAIN_SCORE, ICX, ensure_address, format_decimals, DecimalType
 from ..cui import Column, RowPrinter
+from ..market import upbit
+from ..util import ADDRESS, CHAIN_SCORE, ICX, ensure_address, format_decimals
 from ..wallet import wallet
 from .prep import PRep
 
@@ -425,3 +424,20 @@ def show_price(amount: int, market: str = None):
         price = 1
     value = price*amount//ICX
     click.echo(f'{value:n} {sym}')
+
+@click.command('transfer')
+@click.argument('amount', type=click.STRING, metavar='<amount>')
+@click.argument('to', type=ADDRESS)
+@click.pass_obj
+def transfer(obj: dict, to: str, amount: str):
+    '''
+    Transfer specified amount of native coin to specified user.
+    You may use one of following patterns for <amount>.
+
+    \b
+    - "all" for <balance> - <fee>.
+    - "<X>icx" for <X> ICX.
+    - "<X>" for <X> LOOP.
+    '''
+    wallet = obj[CONTEXT_ASSET]
+    basic.transfer(wallet, to, amount)

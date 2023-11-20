@@ -1,11 +1,6 @@
 #!/usr/bin/env python
 
-import json
-import sys
-from os import path
-
 import click
-from iconsdk.builder.call_builder import CallBuilder
 
 from . import asset, basic, prep, status, update
 
@@ -16,13 +11,14 @@ def main(ctx: click.Context):
 main.add_command(basic.show_account)
 
 @click.group('asset', help='ICON Asset related operations')
-@click.option('--key_store', envvar='ICX_ASSET_KEY_STORE')
+@click.option('--key_store', '--ks', envvar='ICX_ASSET_KEY_STORE')
 @click.pass_context
 def assets(ctx: click.Context, key_store: str = None):
     ctx.ensure_object(dict)
     asset.handleAssetKeyStore(ctx.obj, key_store)
 
 assets.add_command(asset.show_asset)
+assets.add_command(asset.transfer)
 assets.add_command(asset.stake_auto)
 assets.add_command(asset.show_delegation)
 assets.add_command(asset.show_price)

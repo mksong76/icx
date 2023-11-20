@@ -5,8 +5,10 @@ import io
 from typing import List
 
 import click
-
-from iconsdk.builder.transaction_builder import DeployTransactionBuilder
+from iconsdk.builder.transaction_builder import (DeployTransactionBuilder,
+                                                 TransactionBuilder)
+from iconsdk.icon_service import SignedTransaction
+from iconsdk.wallet.wallet import Wallet
 
 from . import service, util, wallet
 from .cui import Column, Header, MapPrinter, Row, RowPrinter
@@ -211,3 +213,64 @@ def deploy_contract(score: str, params: list[str], *, type: str = None, to: str 
     tx = builder.build()
     result = svc.estimate_and_send_tx(tx, mw)
     util.dump_json(result)
+
+def transfer(wallet: Wallet, to: str, amount: str):
+    svc = service.get_instance()
+    owner = wallet.get_address()
+    balance = svc.get_balance(owner)
+
+    tx = (TransactionBuilder()
+          .from_(wallet.get_address())
+          .to(to)
+          .value(0)
+          .nid(svc.nid)
+          .version(3)
+    ).build()
+    price = 12_500_000_000
+    try :
+        transfer_steps = svc.estimate_step(tx)
+    except BaseException as exc:
+        raise Exception(f'Not transferable to={to}') from exc
+    max_value = balance - (transfer_steps*price)
+    if max_value < 0:
+        raise Exception(f'Not enough balance to send transfer tx')
+
+    amount = amount.lower()
+    if amount.endswith('icx'):
+        value = int(float(amount[:-3])*util.ICX)
+    elif amount == 'all':
+        value = max_value
+    else:
+        value = int(amount, 0)
+    if value > max_value:
+        raise Exception(f'Not enough balance to transfer {owner} has {util.format_decimals(max_value,3)} ICX')
+
+    tx = (TransactionBuilder()
+          .from_(wallet.get_address())
+          .to(to)
+          .value(value)
+          .nid(svc.nid)
+          .version(3)
+          .step_limit(transfer_steps)
+    ).build()
+    click.echo(f'Transfering {util.format_decimals(value, 3)} ICX of {owner} to {to}')
+    signed_tx = SignedTransaction(tx, wallet)
+    util.dump_json(signed_tx.signed_transaction_dict)
+    # result = svc.send_transaction_and_pull(signed_tx)
+    # util.dump_json(result)
+
+@click.command('transfer', help="Transfer native token")
+@click.argument('amount', metavar='<amount>', type=click.STRING)
+@click.argument('to', metavar='<to>', type=util.ADDRESS)
+def cmd_transfer(to: str, amount: str):
+    '''
+    Transfer specified amount of native coin to specified user.
+    You may use one of following patterns for <amount>.
+
+    \b
+    - "all" for <balance> - <fee>.
+    - "<X>icx" for <X> ICX.
+    - "<X>" for <X> LOOP.
+    '''
+    ks = wallet.get_instance()
+    transfer(ks, to, amount)

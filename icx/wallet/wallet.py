@@ -22,7 +22,7 @@ def load_wallet_from_dict(src: dict, pw: str) -> Wallet:
     return KeyWallet.load(sk)
 
 class MyWallet(Wallet):
-    def __init__(self, src: Union[str,dict], password: str = None) -> None:
+    def __init__(self, src: Union[str,dict], password: str = None, name: str = None) -> None:
         self.src = src
         if type(src) is str:
             kstore = json.load(open(self.src, 'rb'))
@@ -36,6 +36,11 @@ class MyWallet(Wallet):
         self.__addr = kstore['address']
         self.__wallet = None
         self.__password = password
+        self.__name = name
+    
+    @property
+    def name(self) -> str:
+        return self.__name
 
     def __get_loaded(self) -> Wallet:
         if self.__wallet is None:
@@ -87,10 +92,20 @@ def handleFlag(obj: dict, name: str):
     config = obj[CONTEXT_CONFIG]
     keystores = config.get(CONFIG_KEYSTORES)
     if name not in keystores:
-        click.echo(f'Available networks:{",".join(keystores.keys())}', file=sys.stderr)
+        click.echo(f'Available keystores:{",".join(keystores.keys())}', file=sys.stderr)
         raise Exception(f'Unknown keystore name={name}')
     default_wallet = MyWallet(keystores[name])
     obj[CONTEXT_KEYSTORE] = name
+
+def get_instance_with(obj: dict, ks: Optional[str] = None) -> MyWallet:
+    if ks is None:
+        return get_instance()
+
+    config = obj[CONTEXT_CONFIG]
+    keystores = config.get(CONFIG_KEYSTORES)
+    if ks in keystores:
+        return MyWallet(keystores[ks])
+    return get_instance(ks)
 
 def print_keystores(keystores: dict):
     if len(keystores) == 0:
