@@ -36,7 +36,7 @@ def get_block(ids: List[str], full: bool = False):
     if len(ids) == 0:
         ids = [ 'latest']
     for id in ids:
-        blk = svc.get_block(util.ensure_block(id))
+        blk = svc.get_block(util.ensure_block(id), full_response=full)
         util.dump_json(blk)
 
 @click.command()
