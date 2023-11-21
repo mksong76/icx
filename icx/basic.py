@@ -214,7 +214,7 @@ def deploy_contract(score: str, params: list[str], *, type: str = None, to: str 
     result = svc.estimate_and_send_tx(tx, mw)
     util.dump_json(result)
 
-def transfer(wallet: Wallet, to: str, amount: str):
+def do_transfer(wallet: Wallet, to: str, amount: str):
     svc = service.get_instance()
     owner = wallet.get_address()
     balance = svc.get_balance(owner)
@@ -262,7 +262,7 @@ def transfer(wallet: Wallet, to: str, amount: str):
 @click.command('transfer', help="Transfer native token")
 @click.argument('amount', metavar='<amount>', type=click.STRING)
 @click.argument('to', metavar='<to>', type=util.ADDRESS)
-def cmd_transfer(to: str, amount: str):
+def transfer(to: str, amount: str):
     '''
     Transfer specified amount of native coin to specified user.
     You may use one of following patterns for <amount>.
@@ -273,4 +273,4 @@ def cmd_transfer(to: str, amount: str):
     - "<X>" for <X> LOOP.
     '''
     ks = wallet.get_instance()
-    transfer(ks, to, amount)
+    do_transfer(ks, to, amount)
