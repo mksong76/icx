@@ -2,13 +2,17 @@
 
 import click
 
-from . import asset, basic, prep, status, update
+from . import asset, basic, prep, status, update, proposal
 
 @click.group('icon', help='ICON Basic operations')
 @click.pass_context
 def main(ctx: click.Context):
     pass
 main.add_command(basic.show_account)
+main.add_command(proposal.main)
+
+# for external access
+proposal_main = proposal.main
 
 @click.group('asset', help='ICON Asset related operations')
 @click.option('--key_store', '--ks', envvar='ICX_ASSET_KEY_STORE')

@@ -86,6 +86,7 @@ main.add_command(inspect.show_netinspection, 'netinspect')
 main.add_command(icon.main)
 main.add_command(icon.assets)
 main.add_command(icon.preps)
+main.add_command(icon.proposal_main)
 
 if __name__ == '__main__':
     main()
