@@ -278,7 +278,7 @@ def get_prep(obj: dict, key: str, raw: bool, height: str):
         prep_addr = preps[prep_index]['address']
 
     if prep_index is None:
-        raise Exception(f'fail to find PRep key={key}')
+        raise click.ClickException(f'fail to find PRep key={key}')
 
     prep_info:dict = icon_getPRep(prep_addr, rpc, height=height)
 
@@ -317,8 +317,10 @@ def inspect_prep(obj: dict, key: str):
     '''
     prep_info = load_prep_store(obj[CONTEXT_PREP_STORE])
     prep = search_prep(prep_info, key)
-    if RPC not in prep:
-        raise Exception("unavailble RPC")
+    if prep is None:
+        raise click.ClickException(f'Fail to find PRep with key={key}')
+    if prep is None or RPC not in prep:
+        raise click.ClickException(f'RPC endpoint is unknown for prep=[{prep["name"]}]')
     rpc = prep[RPC]
     inspection = node_inspect(rpc)
     util.dump_json(inspection)
