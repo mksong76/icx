@@ -17,7 +17,7 @@ def show_account(addr: str):
     info, rows = basic.get_account(addr)
 
     rows += [
-        Header(lambda v: 'ICON', 4, '{:^}'),
+        Header('ICON', 4),
     ]
     claimable = int(asset.query_iscore(addr)['estimatedICX'], 0)
     if claimable > 0:
@@ -46,16 +46,17 @@ def show_account(addr: str):
                     .params({ 'address': addr })
                     .build())
             rows += [
-                Header(lambda v: 'PREP Info', 20, '{:^20s}'),
-                Row(lambda v: v['prep'].get('name', ''), 20, '{:>20s}', 'Name'),
+                Header('PREP Info', 10),
+                Row(lambda v: v['prep'].get('name', ''), 20, '{:<20s}', 'Name'),
                 Row(lambda v: util.format_decimals(v['prep'].get('power', '0x0'), 3),
-                    20, '{:>20s}', 'Power'),
+                    24, '{:>20s} ICX', 'Power'),
                 Row(lambda v: util.format_decimals(v['prep'].get('delegated', '0x0'), 3),
-                    20, '{:>20s}', 'Delegated'),
+                    24, '{:>20s} ICX', 'Delegated'),
                 Row(lambda v: util.format_decimals(v['prep'].get('bonded', '0x0'), 3),
-                    20, '{:>20s}', 'Bonded'),
+                    24, '{:>20s} ICX', 'Bonded'),
             ]
         except:
             pass
 
+    rows.append(Header('END', 3))
     MapPrinter(rows).print_data(info)
