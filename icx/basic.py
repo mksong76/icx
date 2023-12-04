@@ -118,45 +118,43 @@ def get_account(addr: str, svc: service.Service = None) -> List[Row]:
     if svc is None:
         svc = service.get_instance()
 
-    info = { 'address': addr }
     rows = [
         Header('Basic', 5),
-        Row(lambda v: v['address'], 42, '{}', 'Address'),
+        Row(addr, 42, '{}', 'Address'),
     ]
 
-    info['balance'] = svc.get_balance(addr)
+    balance = svc.get_balance(addr)
     rows += [
-        Row(lambda v: util.format_decimals(v['balance'], 3), 32, '{:>28s} ICX', 'Balance'),
+        Row(lambda v: util.format_decimals(balance, 3), 32, '{:>28s} ICX', 'Balance'),
     ]
 
     if addr.startswith('cx'):
         status = svc.get_score_status(addr)
-        info['status'] = status
         audit_txhash = status.get('current', {}).get('auditTxHash', None)
         if audit_txhash is not None:
             audit_tx = svc.get_transaction(audit_txhash)
             status['current']['height'] = str(audit_tx['blockHeight'])
         rows += [
             Header('SCORE', 20),
-            Row(lambda v: v['status'].get('owner',''), 42, '{:42s}', 'Owner'),
-            Row(lambda v: v['status'].get('current',{}).get('type', ''), 10, '{:10s}', 'Type'),
-            Row(lambda v: v['status'].get('current',{}).get('height', ''), 16, '{:>16s}', 'Height'),
-            Row(lambda v: v['status'].get('current',{}).get('codeHash', ''), 66, '{:66s}', 'Code Hash'),
+            Row(status.get('owner',''), 42, '{:42s}', 'Owner'),
+            Row(status.get('current',{}).get('type', ''), 10, '{:10s}', 'Type'),
+            Row(status.get('current',{}).get('height', ''), 16, '{:>16s}', 'Height'),
+            Row(status.get('current',{}).get('codeHash', ''), 66, '{:66s}', 'Code Hash'),
         ]
-        if 'depositInfo' in info['status']:
+        if 'depositInfo' in status:
             rows += [
                 Header('DepositInfo', 20),
-                Row(lambda v: util.format_decimals(v['status']['depositInfo'].get('availableDeposit', '0x0'),3), 16, '{:>12s} ICX', 'Avaialble'),
-                Row(lambda v: 'true' if v['status']['depositInfo'].get('useSystemDeposit', '0x0')=='0x1' else 'false', 5, '{:5}', 'Use System Deposit')
+                Row(util.format_decimals(status['depositInfo'].get('availableDeposit', '0x0'),3), 16, '{:>12s} ICX', 'Avaialble'),
+                Row('true' if status['depositInfo'].get('useSystemDeposit', '0x0')=='0x1' else 'false', 5, '{:5}', 'Use System Deposit')
             ]
-    return info, rows
+    return rows
 
 @click.command('account', help='Show account information')
 @click.argument('addr', metavar='<address>', type=util.ADDRESS)
 def show_account(addr: str):
-    info, rows = get_account(addr)
+    rows = get_account(addr)
     rows.append(Header('END', 3))
-    MapPrinter(rows).print_data(info)
+    MapPrinter(rows).print_data(None)
 
 @click.command('deploy', help='Deploy contract')
 @click.option('--to', metavar='<to>', type=util.ADDRESS)

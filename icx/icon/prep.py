@@ -14,7 +14,7 @@ from iconsdk.builder.transaction_builder import CallTransactionBuilder
 
 from .. import service, util, wallet
 from ..config import CONTEXT_CONFIG, Config
-from ..cui import Column, MapPrinter, Row, RowPrinter
+from ..cui import Column, MapPrinter, Row, Header, RowPrinter
 from ..network import CONTEXT_NETWORK
 
 GRADE_TO_TYPE = {
@@ -81,6 +81,18 @@ def icon_getPRep(addr: str, server: str=None, start: int=None, end: int=None, he
     if end is not None:
         params['endRanking'] = f'0x{end:x}'
     call = CallBuilder(to=util.CHAIN_SCORE, method='getPRep', params=params, height=height).build()
+    return svc.call(call)
+
+def icon_getBonderList(addr: str, server: str = None, *, height: int=None) -> dict:
+    svc = get_service_with_rpc(server)
+    params = { 'address':addr }
+    call = CallBuilder(to=util.CHAIN_SCORE, method='getBonderList', params=params, height=height).build()
+    return svc.call(call)
+
+def icon_getBond(addr: str, server: str = None, *, height: int=None) -> dict:
+    svc = get_service_with_rpc(server)
+    params = { 'address':addr }
+    call = CallBuilder(to=util.CHAIN_SCORE, method='getBond', params=params, height=height).build()
     return svc.call(call)
 
 def icon_getPReps(server: str = None, start: int = None, height: int = None) -> any:
@@ -234,8 +246,9 @@ def find_rpc(prep_info:dict) -> Union[str,None]:
 @click.pass_obj
 @click.argument('key')
 @click.option('--raw', is_flag=True)
+@click.option('--bonders', is_flag=True)
 @click.option('--height', type=str, default=None)
-def get_prep(obj: dict, key: str, raw: bool, height: str):
+def get_prep(obj: dict, key: str, raw: bool, bonders: bool, height: str):
     '''
     Get PRep information
     '''
@@ -282,10 +295,22 @@ def get_prep(obj: dict, key: str, raw: bool, height: str):
 
     prep_info:dict = icon_getPRep(prep_addr, rpc, height=height)
 
+    bonds = {}
+    if bonders:
+        bonder_list:dict = icon_getBonderList(prep_addr, rpc, height=height)
+        for bonder in bonder_list['bonderList']:
+            bond = icon_getBond(bonder, rpc, height=height)
+            bonds[bonder] = bond
+
     if raw :
         util.dump_json(prep_info)
+        if bonders:
+            util.dump_json(bonder_list)
+            for bond in bonds.values():
+                util.dump_json(bond)
     else:
-        MapPrinter([
+        rows = [
+            Header('PRep information', 40),
             Row(lambda obj: obj.get('address'), 42, '{}', 'Address'),
             Row(lambda obj: obj.get('name'), 20, '{}', 'Name'),
             Row(lambda obj: obj.get('city'), 10, '{}', 'City'),
@@ -296,17 +321,33 @@ def get_prep(obj: dict, key: str, raw: bool, height: str):
             Row(lambda obj: obj.grade, 4, '{}', 'Grade'),
             Row(lambda obj: obj.get('nodeAddress'), 42, '{}', 'Node'),
             Row(lambda obj: obj.get('p2pEndpoint'), 40, '{}', 'P2P'),
+            Header('Status', 6),
             Row(lambda obj: PENALTY_TO_STR[obj.get('penalty')], 20, '{}', 'Penalty'),
             Row(lambda obj: STATUS_TO_STR[obj.get('status')], 20, '{}', 'Status'),
             Row(lambda obj: int(obj.get('lastHeight'), 0), 10, '{:>}', 'LastHeight'),
             Row(lambda obj: util.format_decimals(obj.get('irep')), 40, '{:>40}', 'iRep'),
             Row(lambda obj: int(obj.get('irepUpdateBlockHeight'),0), 40, '{:>40,}', 'iRep-Height'),
-            Row(lambda obj: util.format_decimals(obj.bonded), 40, '{:>40}', 'Bonded'),
-            Row(lambda obj: util.format_decimals(obj.delegated), 40, '{:>40}', 'Delegated'),
-            Row(lambda obj: util.format_decimals(obj.power), 40, '{:>40}', 'Power'),
             Row(lambda obj: obj.get_int('totalBlocks'), 40, '{:>40,}', 'Total Blocks'),
             Row(lambda obj: obj.get_int('validatedBlocks'), 40, '{:>40,}', 'Validated Blocks'),
-        ]).print_header().print_data(PRep(prep_info))
+            Header('Power', 5),
+            Row(lambda obj: util.format_decimals(obj.bonded), 40, '{:>36} ICX', 'Bonded'),
+            Row(lambda obj: util.format_decimals(obj.delegated), 40, '{:>36} ICX', 'Delegated'),
+            Row(lambda obj: util.format_decimals(obj.power), 40, '{:>36} ICX', 'Power'),
+        ]
+
+        idx = 0
+        for bonder, bond in bonds.items():
+            for bb in bond['bonds']:
+                if bb['address'] == prep_addr:
+                    rows += [
+                        Header(f'Bonder[{idx}]', 20),
+                        Row(bonder, 42, '{:<42}', 'Address'),
+                        Row(util.format_decimals(as_int(bb['value'])), 40, '{:>36} ICX', 'Bonded'),
+                    ]
+            idx += 1
+
+        rows.append(Header('END', 3))
+        MapPrinter(rows).print_data(PRep(prep_info))
 
 @click.command("inspect")
 @click.pass_obj
