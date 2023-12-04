@@ -126,7 +126,10 @@ class PRep(dict):
     
     @property
     def bond_rate(self) -> float:
-        return self.bonded*20/(self.bonded+self.delegated)
+        voted = self.bonded+self.delegated
+        if voted == 0:
+            return 0.0
+        return self.bonded*20/voted
     
     @property
     def voter_rate(self) -> float:
