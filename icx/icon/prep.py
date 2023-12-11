@@ -498,7 +498,7 @@ PREP_COLUMNS = [
     Column(lambda n, p: p.get('name', ''), 18, "{:<18.18s}", "Name" ),
     Column(lambda n, p: p.get('country', ''), 3, "{:<3.3s}", "C.C" ),
     Column(lambda n, p: p.power//10**21, 12, "{:>11,d}k", "Power"),
-    Column(lambda n, p: p.bond_rate*100, 7, "{:>6.2f}%", "Bond %"),
+    Column(lambda n, p: p.bond_rate*100, 8, "{:>7.2f}%", "Bond %"),
     Column(lambda n, p: p.get_voter_rate(1000)*100, 7, "{:>6.2f}%", "Voter %"),
     Column(lambda n, p: p.delegation_required//10**21, 12, "{:>11,d}k", "Delegation"),
     Column(lambda n, p: p.commission_rate/100, 10, "{:>9.2f}%", 'Commission'),
