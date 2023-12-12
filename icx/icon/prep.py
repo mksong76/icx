@@ -159,8 +159,16 @@ class PRep(dict):
         return self.get_int('delegated')
 
     @property
-    def commission_rate(self) -> int:
-        return self.get_int('commission_rate')
+    def commission_rate(self) -> float:
+        return self.get_int('commissionRate')
+
+    @property
+    def max_commission_rate(self) -> float:
+        return self.get_int('maxCommissionRate')
+
+    @property
+    def max_commission_change_rate(self) -> float:
+        return self.get_int('maxCommissionChangeRate')
     
     @property
     def delegation_required(self) -> int:
@@ -333,6 +341,10 @@ def get_prep(obj: dict, key: str, raw: bool, bonders: bool, height: str):
             Row(lambda obj: util.format_decimals(obj.bonded), 40, '{:>36} ICX', 'Bonded'),
             Row(lambda obj: util.format_decimals(obj.delegated), 40, '{:>36} ICX', 'Delegated'),
             Row(lambda obj: util.format_decimals(obj.power), 40, '{:>36} ICX', 'Power'),
+            Header('Commission', 10),
+            Row(lambda obj: obj.commission_rate/100, 40, '{:>5.2f}%', 'Commission Rate'),
+            Row(lambda obj: obj.max_commission_rate/100, 40, '{:>5.2f}%', 'Max CR'),
+            Row(lambda obj: obj.max_commission_change_rate/100, 40, '{:>5.2f}%', 'Max Change CR'),
         ]
 
         idx = 0
@@ -508,8 +520,9 @@ PREP_COLUMNS = [
 @click.option('--all', is_flag=True, help='List all (including candidates, no power)')
 @click.option("--raw", is_flag=True, help='Raw JSON output')
 @click.option('--addr', is_flag=True, help='Include address of PRep')
+@click.option('--detail', is_flag=True, help='Include more fields')
 @click.option('--voter', is_flag=True, help='Sort by voter power')
-def list_preps(height: int = None, raw: bool = False, all: bool = False, addr: bool = False, voter: bool = False):
+def list_preps(height: int = None, raw: bool = False, all: bool = False, addr: bool = False, voter: bool = False, detail: bool = False):
     '''
     List PReps
     '''
@@ -523,6 +536,14 @@ def list_preps(height: int = None, raw: bool = False, all: bool = False, addr: b
     if addr:
         columns = columns[:]
         columns.insert(3, Column(lambda n, p: p.get('address'), 42, '{:42s}', 'Address'))
+    if detail:
+        columns = columns[:]
+        columns += [
+            Column(lambda n, p: p.max_commission_rate/100, 10, "{:>9.2f}%", 'Max Comm'),
+            Column(lambda n, p: p.max_commission_change_rate/100, 10, "{:>9.2f}%", 'Max Change'),
+        ]
+
+    
     printer = RowPrinter(columns)
     printer.print_header()
     idx = 0
