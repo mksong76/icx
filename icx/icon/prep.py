@@ -342,9 +342,9 @@ def get_prep(obj: dict, key: str, raw: bool, bonders: bool, height: str):
             Row(lambda obj: util.format_decimals(obj.delegated), 40, '{:>36} ICX', 'Delegated'),
             Row(lambda obj: util.format_decimals(obj.power), 40, '{:>36} ICX', 'Power'),
             Header('Commission', 10),
-            Row(lambda obj: obj.commission_rate/100, 40, '{:>5.2f}%', 'Commission Rate'),
-            Row(lambda obj: obj.max_commission_rate/100, 40, '{:>5.2f}%', 'Max CR'),
-            Row(lambda obj: obj.max_commission_change_rate/100, 40, '{:>5.2f}%', 'Max Change CR'),
+            Row(lambda obj: obj.commission_rate/100, 40, '{:>6.2f}%', 'Commission Rate'),
+            Row(lambda obj: obj.max_commission_rate/100, 40, '{:>6.2f}%', 'Max CR'),
+            Row(lambda obj: obj.max_commission_change_rate/100, 40, '{:>6.2f}%', 'Max Change CR'),
         ]
 
         idx = 0
@@ -513,7 +513,7 @@ PREP_COLUMNS = [
     Column(lambda n, p: p.bond_rate*100, 8, "{:>7.2f}%", "Bond %"),
     Column(lambda n, p: p.get_voter_rate(1000)*100, 7, "{:>6.2f}%", "Voter %"),
     Column(lambda n, p: p.delegation_required//10**21, 12, "{:>11,d}k", "Delegation"),
-    Column(lambda n, p: p.commission_rate/100, 10, "{:>9.2f}%", 'Commission'),
+    Column(lambda n, p: p.commission_rate/100, 7, "{:>6.2f}%", 'Commission'),
 ]
 @click.command('list')
 @click.option('--height', type=util.INT, help='Height for the block to call getPReps()')
@@ -539,8 +539,8 @@ def list_preps(height: int = None, raw: bool = False, all: bool = False, addr: b
     if detail:
         columns = columns[:]
         columns += [
-            Column(lambda n, p: p.max_commission_rate/100, 10, "{:>9.2f}%", 'Max Comm'),
-            Column(lambda n, p: p.max_commission_change_rate/100, 10, "{:>9.2f}%", 'Max Change'),
+            Column(lambda n, p: p.max_commission_rate/100, 7, "{:>6.2f}%", 'Max Comm'),
+            Column(lambda n, p: p.max_commission_change_rate/100, 7, "{:>6.2f}%", 'Max Change'),
         ]
 
     
