@@ -28,7 +28,7 @@ def get_header(height: int, nid: int, output: io.RawIOBase, binary: bool, text: 
     res = svc.get_btp_header(height, nid)
     if text:
         hdr: BTPHeader = BTPHeader.from_binary(res)
-        util.dump_json(hdr.to_json(), fp=io.TextIOWrapper(output))
+        util.dump_json(hdr.as_json(), fp=io.TextIOWrapper(output))
     elif binary:
         bin = base64.decodestring(res.encode())
         output.write(bin)

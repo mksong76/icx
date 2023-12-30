@@ -1,6 +1,6 @@
 import json
 from typing import Tuple
-from .blockdata import Binary, RLPList, BInteger, rlpitem
+from .blockdata import Binary, RLPList, BInteger, rlpitem, to_json
 
 class BTPHeader(RLPList):
     @rlpitem(0, BInteger)
@@ -16,7 +16,7 @@ class BTPHeader(RLPList):
         pass
 
     def network_section_to_root(self) -> Tuple[Binary]:
-        return tuple(map(lambda x: Binary(x), self[3]))
+        return tuple(map(lambda x: Binary(x), self[3][0]))
     
     @rlpitem(4, BInteger)
     def network_id(self) -> BInteger:
@@ -48,19 +48,16 @@ class BTPHeader(RLPList):
     def next_proof_context(self) -> Binary:
         pass
 
-    def to_json(self) -> dict:
+    def as_json(self) -> dict:
         return {
-            'height': self.height().to_json(),
-            'round': self.round().to_json(),
-            'nextProofContextHash': Binary.to_json(self.next_proof_context_hash()),
-            'nid': self.network_id().to_json(),
-            'networkSectionToRoot': tuple(map(
-                lambda x: Binary.to_json(x),
-                self.network_section_to_root()
-            )),
-            'updateNumber': self.update_number().to_json(),
-            'prev': Binary.to_json(self.prev()),
-            'messageCount': self.message_count().to_json(),
-            'messageRoot': Binary.to_json(self.message_root()),
-            'nextProofContext': Binary.to_json(self.next_proof_context()),
+            'height': self.height().as_json(),
+            'round': self.round().as_json(),
+            'nextProofContextHash': to_json(self.next_proof_context_hash()),
+            'nid': self.network_id().as_json(),
+            'networkSectionToRoot': to_json(self.network_section_to_root()),
+            'updateNumber': self.update_number().as_json(),
+            'prev': to_json(self.prev()),
+            'messageCount': self.message_count().as_json(),
+            'messageRoot': to_json(self.message_root()),
+            'nextProofContext': to_json(self.next_proof_context()),
         }

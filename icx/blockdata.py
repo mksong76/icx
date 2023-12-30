@@ -13,16 +13,16 @@ class Binary(bytes):
     def __str__(self) -> str:
         return f'0x{self.hex()}'
 
-    def to_int(self) -> 'BInteger':
+    def as_integer(self) -> 'BInteger':
         return BInteger(self)
 
-    def to_address(self) -> 'BAddress':
+    def as_address(self) -> 'BAddress':
         return BAddress(self)
 
-    def to_str(self) -> 'BString':
+    def as_string(self) -> 'BString':
         return BString(self)
     
-    def to_json(self) -> str:
+    def as_json(self) -> str:
         return str(self)
 
     def rlp_decode(self) -> any:
@@ -41,14 +41,7 @@ class Binary(bytes):
             return Binary(data)
     
     @staticmethod
-    def to_json(data: Optional['Binary']) -> Optional[str]:
-        if data is None:
-            return None
-        else:
-            return str(data)
-    
-    @staticmethod
-    def to_int(bs: bytes) -> int:
+    def to_integer(bs: bytes) -> int:
         return int.from_bytes(bs, byteorder='big', signed=True)
 
     @staticmethod
@@ -62,7 +55,7 @@ class Binary(bytes):
         return ('cx' if prefix else 'hx') + bs[1:].hex()
 
     @staticmethod
-    def as_string(bs: bytes) -> str:
+    def to_string(bs: bytes) -> str:
         return bs.decode()
 
 
@@ -80,10 +73,10 @@ class RLPList(tuple):
             raise Exception(f'NotAList')
         return super().__new__(cls, data)
     
-    def to_bytes(self) -> bytes:
+    def as_bytes(self) -> bytes:
         return rlp.encode(self)
 
-    def to_binary(self) -> Binary:
+    def as_binary(self) -> Binary:
         return Binary(rlp.encode(self))
 
     @classmethod
@@ -94,12 +87,12 @@ class RLPList(tuple):
 class BAddress(str):
     def __new__(cls, v, s: str = None):
         binary = Binary.from_any(v)
-        s = Binary.to_address(binary) if s is None else s
+        s = Binary.as_address(binary) if s is None else s
         self = super().__new__(cls, s)
         self.__binary = binary
         return self
 
-    def to_binary(self) -> Binary:
+    def as_binary(self) -> Binary:
         return self.__binary
 
     @staticmethod
@@ -121,33 +114,33 @@ class BAddress(str):
 class BString(str):
     def __new__(cls, v: any):
         binary = Binary.from_any(v)
-        self = super().__new__(cls, Binary.as_string(binary))
+        self = super().__new__(cls, Binary.to_string(binary))
         self.__binary = binary
         return self
 
-    def to_binary(self) -> Binary:
+    def as_binary(self) -> Binary:
         return self.__binary
 
-    def to_json(self) -> str:
+    def as_json(self) -> any:
         return str(self)
 
 
 class BInteger(int):
     def __new__(cls, v: any):
         binary = Binary.from_any(v)
-        self = super().__new__(cls, Binary.to_int(binary))
+        self = super().__new__(cls, Binary.to_integer(binary))
         self.__binary = binary
         return self
     
-    def to_binary(self) -> bytes:
+    def as_binary(self) -> Binary:
         return self.__binary
 
-    def to_json(self) -> str:
+    def as_json(self) -> any:
         return f'{self:#x}'
 
 class Block(RLPList):
     def hash(self) -> Binary:
-        return self.to_binary().sha3_256()
+        return self.as_binary().sha3_256()
 
     @rlpitem(0, BInteger)
     def version(self) -> BInteger:
@@ -184,7 +177,7 @@ class Block(RLPList):
 
 class Validators(RLPList):
     def at(self, idx:int) -> BAddress:
-        return Binary(self[idx]).to_address()
+        return Binary.to_address(self[idx])
 
 
 class BlockVotes(RLPList):
@@ -202,8 +195,8 @@ class BlockVotes(RLPList):
         for v in self[2]:
             sig = v[1]
             vote_msg = rlp.encode([
-                blk.height().to_binary(),
-                self.round().to_binary(),
+                blk.height().as_binary(),
+                self.round().as_binary(),
                 b'\x01',
                 blk_hash,
                 self.partset_id(),
@@ -214,6 +207,28 @@ class BlockVotes(RLPList):
             addr = BAddress.from_publickey(pk)
             voted.append(addr)
         return voted
+
+def to_json(v: any) -> any:
+    if v is None:
+        return None
+    elif isinstance(v, Binary):
+        return v.as_json()
+    elif isinstance(v, BAddress):
+        return str(v)
+    elif isinstance(v, BInteger):
+        return v.as_json()
+    elif isinstance(v, tuple):
+        return tuple(map(lambda x: to_json(x), v))
+    elif isinstance(v, list):
+        return list(map(lambda x: to_json(x), v))
+    elif isinstance(v, dict):
+        return {k: to_json(x) for k, x in v.items()}
+    else:
+        return v
+
+def to_binary(v: any) -> any:
+    if v is None:
+        return None
 
 if __name__ == '__main__':
     svc = service.get_instance()
