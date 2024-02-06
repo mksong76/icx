@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import json
 import locale
 import sys
 from datetime import timedelta
@@ -47,6 +48,15 @@ class AssetService:
             method='claimIScore'
         ).build()
         return self.service.estimate_and_send_tx(tx, wallet)
+
+    def get_last_height(self) -> int:
+        try:
+            net_info = self.service.get_network_info()
+            return int(net_info['latest'], 0)
+        except:
+            pass
+        blk = self.service.get_block('latest')
+        return blk['height']
 
     def get_balance(self, address: str) -> int:
         return self.service.get_balance(address)
@@ -181,10 +191,12 @@ def sum_delegation(delegation: dict) -> Tuple[int, int]:
 def sum_bond(bond: dict) -> Tuple[int, int, int]:
     bonded = int(bond['totalBonded'], 0)
     unbonding = 0
+    expire_height = 0
     for unbond in bond['unbonds']:
-        unbonding += int(unbond['unbond'], 0)
+        unbonding += int(unbond['value'], 0)
+        expire_height = max(expire_height, int(unbond['expireBlockHeight'], 0))
     votingPower = int(bond['votingPower'], 0)
-    return bonded, unbonding, votingPower
+    return bonded, unbonding, votingPower, expire_height
 
 def get_stake_target(config: Config, addr: str, target: int = 0) -> int:
     targets = config[CONFIG_STAKE_TARGETS]
@@ -231,6 +243,7 @@ def show_asset_of(addr: str):
     stake = service.get_stake(addr)
     delegation = service.get_delegation(addr)
     bond = service.get_bond(addr)
+    last_height = service.get_last_height()
     #print(json.dumps(balance, indent=2))
     #print(json.dumps(stake, indent=2))
     #print(json.dumps(delegation, indent=2))
@@ -239,7 +252,7 @@ def show_asset_of(addr: str):
     claimable = int(iscore['estimatedICX'], 0)
     staked, unstaking, remaining_blocks = sum_stake(stake)
     delegated, voting_power = sum_delegation(delegation)
-    bonded, unbonding, _ = sum_bond(bond)
+    bonded, unbonding, _, expire_height = sum_bond(bond)
     asset = balance+claimable+staked+unstaking
 
     entries = []
@@ -258,9 +271,14 @@ def show_asset_of(addr: str):
                 [ 'STAKED', staked, staked/asset ],
                 [ '- DELEGATED', delegated, delegated/staked ],
                 [ '- BONDED', bonded, bonded/staked ],
-                [ '- UNBONDING', unbonding, unbonding/staked ],
                 [ '- REMAINS', voting_power, voting_power/staked ],
             ]
+            if unbonding > 0:
+                bonding_remains = expire_height - last_height
+                remaining_time = timedelta(seconds=bonding_remains*2)
+                entries += [
+                    [ '- UNBONDING', unbonding, unbonding/staked, f'{remaining_time}' ],
+                ]
     entries += [
         [ 'ASSET', asset, 1.0 ],
     ]
