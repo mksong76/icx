@@ -349,12 +349,20 @@ def get_prep(obj: dict, key: str, raw: bool, bonders: bool, height: str):
 
         idx = 0
         for bonder, bond in bonds.items():
+            rows += [
+                Header(f'Bonder[{idx}]', 20),
+                Row(bonder, 42, '{:<42}', 'Address'),
+            ]
             for bb in bond['bonds']:
                 if bb['address'] == prep_addr:
                     rows += [
-                        Header(f'Bonder[{idx}]', 20),
-                        Row(bonder, 42, '{:<42}', 'Address'),
                         Row(util.format_decimals(as_int(bb['value'])), 40, '{:>36} ICX', 'Bonded'),
+                    ]
+            for bb in bond['unbonds']:
+                if bb['address'] == prep_addr:
+                    rows += [
+                        Row(util.format_decimals(as_int(bb['value'])), 40, '{:>36} ICX', 'Unbonding'),
+                        Row(as_int(bb['expireBlockHeight']), 36, '{:>36}', 'Expire'),
                     ]
             idx += 1
 
