@@ -113,15 +113,6 @@ class AssetService:
             }
         ).build())
 
-    def get_bond(self, address: str) -> dict:
-        return self.service.call(CallBuilder(
-            to=CHAIN_SCORE,
-            method='getBond',
-            params = {
-                'address': address,
-            }
-        ))
-
     def delegate_all(self, preps: List[str], wallet: Wallet, target: int = 0, delegation: dict = None):
         if delegation is None:
             delegation = self.get_delegation(wallet.get_address())
