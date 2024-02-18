@@ -6,7 +6,7 @@ import click
 
 from .. import service, util, basic
 from ..cui import Header, Row, MapPrinter
-from .asset import AssetService, sum_stake
+from .asset import AssetService, sum_delegation, sum_stake
 from iconsdk.builder.call_builder import CallBuilder
 
 @click.command('account', help='ICON account information')
@@ -32,14 +32,21 @@ def show_account(addr: str):
     if staked > 0 or unstaking > 0:
         bond_info = asset.get_bond(addr)
         total_bonded = int(bond_info['totalBonded'], 0)
-        rows += [
-            Row(lambda v: util.format_decimals(staked, 3),
-                24, '{:>20s} ICX', 'Stake'),
-            Row(lambda v: util.format_decimals(unstaking, 3),
-                24, '{:>20s} ICX', 'Unstaking'),
-            Row(lambda v: util.format_decimals(total_bonded, 3),
-                24, '{:>20s} ICX', 'Bonded'),
-        ]
+        delegation = asset.get_delegation(addr)
+        delegated, voting_power = sum_delegation(delegation)
+        for item in [
+            [ 'Staked', staked ],
+            [ 'Delegated', delegated ],
+            [ 'Bonded', total_bonded ],
+            [ 'Voting Power', voting_power ],
+            [ 'Unstaking', unstaking ],
+        ]:
+            if item[1] > 0:
+                rows.append(
+                    Row(util.format_decimals(item[1], 3),
+                        24, '{:>20s} ICX', item[0]),
+                )
+
         idx = 0
         for unstake in stake_info.get('unstakes', []):
             unstake_amount = int(unstake.get('unstake', '0x0'), 0)
@@ -59,7 +66,7 @@ def show_account(addr: str):
             rows += [
                 Header(f'Bond[{idx}]', 0),
                 Row(bond['address'], 20, '{:<20s}', 'Address'),
-                Row(util.format_decimals(bond['value'], 3), 20, '{:<20s}', 'Amount'),
+                Row(util.format_decimals(bond['value'], 3), 24, '{:>20s} ICX', 'Amount'),
             ]
             idx += 1
 
