@@ -229,7 +229,7 @@ def get_proposal(id: str, *, raw=False, name=False):
             rows.append(cui.Row(summarize_content(c), 60, None, f'Content[{idx}]'))
             idx += 1
 
-        apply: Optional[dict] = proposal["apply"]
+        apply: Optional[dict] = proposal.get("apply")
         if apply is not None:
             rows.append(cui.Header("Apply", 0))
             rows += [
