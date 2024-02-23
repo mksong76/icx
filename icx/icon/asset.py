@@ -285,7 +285,7 @@ def show_asset_of(addr: str):
     columns = [
         Column(lambda x: x[0], 13, '{:13s}', "Name"),
         Column(lambda x: format_decimals(x[1],3), 20, '{:>16s} ICX', 'ICX'),
-        Column(lambda x: x[1]*price//ICX, 16, f'{{:>12,}} {sym[:3]:3s}', sym),
+        Column(lambda x: x[1]*price//ICX, 18, f'{{:>12,}} {sym[:3]:3s}', sym),
         Column(lambda x: x[2]*100, 8, '{:7.3f}%', 'Portion'),
         Column(lambda x: x[3] if len(x)>3 else '', 25, '{:<25}', 'Note'),
     ]
