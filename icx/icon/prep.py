@@ -5,7 +5,7 @@ import json
 import sys
 from hashlib import sha3_256
 from os import path
-from typing import Any, List, Optional, Union
+from typing import Any, Iterable, List, Optional, Union
 
 import click
 import coincurve
@@ -50,6 +50,31 @@ PENALTY_TO_STR = {
     "0x3": "BlockValidation",
     "0x4": "NonVote",
 }
+
+class JailFlag:
+    Jailed = 1
+    Unjailing = 2
+    LowProductivity = 4
+    DoubleSign = 8
+
+    NAMES = {
+        Jailed: 'jailed',
+        Unjailing: 'unjailing',
+        LowProductivity: 'lowProductivity',
+        DoubleSign: 'doubleSign',
+    }
+
+    @classmethod
+    def as_name(clz, flag: int) -> str:
+        return clz.NAMES[flag]
+
+    @classmethod
+    def from_flags(clz, flags: Optional[int]) -> Iterable[int]:
+        if flags is None:
+            return ()
+        for k, _ in clz.NAMES.items():
+            if flags & k:
+                yield k
 
 PREPS_JSON="~/.preps.{network}.json"
 P2P="p2p"
@@ -335,18 +360,48 @@ def get_prep(obj: dict, key: str, raw: bool, bonders: bool, height: str):
             Row(lambda obj: obj.grade, 4, '{}', 'Grade'),
             Row(lambda obj: obj.get('nodeAddress'), 42, '{}', 'Node'),
             Row(lambda obj: obj.get('p2pEndpoint'), 40, '{}', 'P2P'),
+        ]
+
+        has_public_key = as_bool(prep_info.get('hasPublicKey'))
+        public_key_status = 'N/A' if has_public_key is None else 'OK' if has_public_key else 'NOT OK'
+        rows +=[
             Header('Status', 6),
             Row(lambda obj: PENALTY_TO_STR[obj.get('penalty')], 20, '{}', 'Penalty'),
             Row(lambda obj: STATUS_TO_STR[obj.get('status')], 20, '{}', 'Status'),
+            Row(public_key_status, 10, '{}', 'PublicKey'),
             Row(lambda obj: int(obj.get('lastHeight'), 0), 10, '{:>}', 'LastHeight'),
             Row(lambda obj: util.format_decimals(obj.get('irep')), 40, '{:>40}', 'iRep'),
-            Row(lambda obj: int(obj.get('irepUpdateBlockHeight'),0), 40, '{:>40,}', 'iRep-Height'),
+            Row(lambda obj: int(obj.get('irepUpdateBlockHeight'),0), 40, '{:>40}', 'iRep-Height'),
             Row(lambda obj: obj.get_int('totalBlocks'), 40, '{:>40,}', 'Total Blocks'),
             Row(lambda obj: obj.get_int('validatedBlocks'), 40, '{:>40,}', 'Validated Blocks'),
+        ]
+
+        jail_flags = as_int(prep_info.get('jailFlags'))
+        if jail_flags is not None and jail_flags != 0:
+            jail_flag_list = list(JailFlag.from_flags(jail_flags))
+            jail_flags_str = ", ".join(
+                map(lambda x: JailFlag.as_name(x).capitalize(), jail_flag_list)
+            )
+            rows += [
+                Header('Jail Info', 0),
+                Row(jail_flags_str, 40, '{:<}', 'Jail Flags'),
+            ]
+
+            unjail_request_height = as_int(prep_info.get('unjailRequestHeight'))
+            unjail_status = f'Requested at {unjail_request_height}' \
+                if unjail_request_height != 0 else 'Not requested'
+            rows += [
+                Row( unjail_status, 40, '{:<}', 'Unjail Request'),
+            ]
+
+        rows += [
             Header('Power', 5),
             Row(lambda obj: util.format_decimals(obj.bonded), 40, '{:>36} ICX', 'Bonded'),
             Row(lambda obj: util.format_decimals(obj.delegated), 40, '{:>36} ICX', 'Delegated'),
             Row(lambda obj: util.format_decimals(obj.power), 40, '{:>36} ICX', 'Power'),
+        ]
+
+        rows += [
             Header('Commission', 10),
             Row(lambda obj: obj.commission_rate/100, 40, '{:>6.2f}%', 'Commission Rate'),
             Row(lambda obj: obj.max_commission_rate/100, 40, '{:>6.2f}%', 'Max CR'),
