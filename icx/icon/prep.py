@@ -23,6 +23,12 @@ GRADE_TO_TYPE = {
     "0x2": "Cand",
 }
 
+GRADE_TYPE_TO_PTR = {
+    'Main': 2,
+    'Sub': 1,
+    'Cand': 0,
+}
+
 STATE_TO_STR = {
     "0x0": "None",
     "0x1": "Ready",
@@ -559,7 +565,12 @@ def list_preps(height: int = None, raw: bool = False, all: bool = False, addr: b
     sub_count = 0
     cand_count = 0
     if voter:
-        preps.sort(key=lambda x: (x.voter_rate, -x.delegation_required), reverse=True)
+        preps.sort(key=lambda x: (
+            GRADE_TYPE_TO_PTR[x.grade],
+            x.voter_rate,
+            x.power,
+            -x.delegation_required,
+        ), reverse=True)
     for prep in preps:
         idx += 1
         grade = prep.grade
