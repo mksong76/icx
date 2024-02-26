@@ -28,6 +28,12 @@ class Proposal(dict):
         5: "EXPIRED",
     }
 
+    FinishedStatus = ["APPLIED", "DISAPPROVED", "CANCELED", "EXPIRED"]
+
+    @property
+    def finished(self) -> bool:
+        return self.status in Proposal.FinishedStatus
+
     def __new__(cls, *args: Any, **kwargs: Any) -> "Proposal":
         return super().__new__(cls, *args, **kwargs)
 
@@ -122,9 +128,12 @@ def summarize_content(c: dict) -> str:
         value = { "address": value["address"], 'content': "..." }
     return f'{name} {json.dumps(value)}'
 
+
+
 @main.command("list")
 @click.option("--raw", is_flag=True)
-def list_proposals(*, raw: bool = False):
+@click.option('--all', '-a', is_flag=True)
+def list_proposals(*, raw: bool = False, all: bool = False):
     svc = service.get_instance()
     info = svc.get_network_info()
     last_height = int(info["latest"], 0)
@@ -165,9 +174,12 @@ def list_proposals(*, raw: bool = False):
                 ),
             ]
         )
+        proposals: list[Proposal] = map(lambda x: Proposal(x), ret['proposals'])
+        if not all:
+            proposals = filter(lambda x: not x.finished, proposals) 
         p.print_separater()
-        for proposal in ret["proposals"]:
-            p.print_data(Proposal(proposal))
+        for proposal in proposals:
+            p.print_data(proposal)
         p.print_separater()
 
 
