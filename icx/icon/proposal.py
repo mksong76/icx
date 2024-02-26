@@ -28,12 +28,6 @@ class Proposal(dict):
         5: "EXPIRED",
     }
 
-    FinishedStatus = ["APPLIED", "DISAPPROVED", "CANCELED", "EXPIRED"]
-
-    @property
-    def finished(self) -> bool:
-        return self.status in Proposal.FinishedStatus
-
     def __new__(cls, *args: Any, **kwargs: Any) -> "Proposal":
         return super().__new__(cls, *args, **kwargs)
 
@@ -176,7 +170,7 @@ def list_proposals(*, raw: bool = False, all: bool = False):
         )
         proposals: list[Proposal] = map(lambda x: Proposal(x), ret['proposals'])
         if not all:
-            proposals = filter(lambda x: not x.finished, proposals) 
+            proposals = filter(lambda x: x.end_block_height>last_height, proposals) 
         p.print_separater()
         for proposal in proposals:
             p.print_data(proposal)
