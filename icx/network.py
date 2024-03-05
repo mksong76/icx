@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from typing import List
 import click
 import sys
 
@@ -8,6 +9,8 @@ from .cui import Column, RowPrinter
 
 CONFIG_NETWORKS='networks'
 CONTEXT_NETWORK='network.name'
+CONFIG_NODE_SEEDS='node.seeds'
+CONTEXT_NODE_SEED='node.seed'
 
 def handleFlag(obj: dict, net: str):
     config = obj[CONTEXT_CONFIG]
@@ -17,6 +20,10 @@ def handleFlag(obj: dict, net: str):
         raise Exception(f'Unknown network name={net}')
     obj[CONTEXT_NETWORK] = net
     service.set_default(*networks[net])
+
+    seeds = config.get(CONFIG_NODE_SEEDS)
+    if net in seeds:
+        obj[CONTEXT_NODE_SEED] = seeds[net]
 
 @click.command('net')
 @click.pass_obj
@@ -85,3 +92,49 @@ def main(obj: dict, name: str = None, url: str = None, nid: str = None, delete: 
     config[CONFIG_NETWORKS] = networks
 
     click.echo(f'Network {name} is set as URL={url} NID=0x{nid:x}')
+
+@click.command('seed')
+@click.pass_obj
+@click.argument('network', type=click.STRING, required=False)
+@click.argument('server', nargs=-1)
+@click.option('--delete', '-d', type=click.BOOL, is_flag=True, default=False)
+def set_seed(obj: dict, network: str = None, delete: bool = None, server: List[str] = None):
+    '''
+    Manage seed server configurations for networks
+    '''
+    config: Config = obj[CONTEXT_CONFIG]
+    prep_seeds: dict = config[CONFIG_NODE_SEEDS]
+
+    if network is None:
+        if len(prep_seeds) == 0:
+            click.echo(f'No seed servers are registered')
+            return
+        columns = [
+            Column(lambda name, info: name, 10, name='Name'),
+            Column(lambda name, info: ",".join(info), 60, name='Seed servers'),
+        ]
+        printer = RowPrinter(columns)
+        printer.print_separater()
+        printer.print_header()
+        printer.print_separater()
+        for name, value in prep_seeds.items():
+            printer.print_data(name, value)
+            printer.print_separater()
+        return
+
+    if len(server) == 0:
+        if network in prep_seeds:
+            if delete:
+                del prep_seeds[network]
+                config[CONFIG_NODE_SEEDS] = prep_seeds
+                click.echo(f'Seed servers for [{network}] is deleted')
+            else:
+                seeds: List[str] = prep_seeds[network]
+                click.echo(f'Seed servers for [{network}] : {" ".join(seeds)}')
+        else:
+            click.secho(f'No seed servers for [{network}]', color='red', file=sys.stderr)
+        return
+
+    prep_seeds[network] = server
+    config[CONFIG_NODE_SEEDS] = prep_seeds
+    click.echo(f'Seed servers for [{network}] are set')

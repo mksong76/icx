@@ -8,6 +8,8 @@ from typing import Dict, List, Optional, Tuple
 from urllib.parse import urlparse, ParseResult
 
 import click
+
+from .network import CONTEXT_NETWORK, CONTEXT_NODE_SEED
 from . import service, util
 
 P2P_TO_RPC = {
@@ -319,10 +321,13 @@ class NetworkInformation:
 
         print(f'Summary servers:{len(self.p2pToNode)} wallets:{len(self.idToNode)} inspected:{inspected}')
 
-def inspect_url_of(server: str = None, rpc: str = None, channel: str = None, informal: bool = False) -> ParseResult:
+def inspect_url_of(obj: dict, server: str = None, rpc: str = None, channel: str = None, informal: bool = False) -> ParseResult:
     if rpc is None:
         if server is not None:
             rpc = f'http://{server}/api/v3'
+        elif CONTEXT_NODE_SEED in obj:
+            p2p = obj[CONTEXT_NODE_SEED][0]
+            rpc = Node.from_p2p(p2p).get_url('/api/v3')
         elif service.default_net is not None:
             rpc, _ = service.default_net
         else:
@@ -347,7 +352,7 @@ def show_inspection(obj: dict, server: str = None, rpc: str = None, channel: str
     '''
     Inspect the channel of the server
     '''
-    url = inspect_url_of(server, rpc, channel, informal).geturl()
+    url = inspect_url_of(obj, server, rpc, channel, informal).geturl()
     try:
         inspection = util.rest_get(url)
     except BaseException as exc:
@@ -364,7 +369,7 @@ def show_netinspection(obj: dict, server: str = None, rpc: str = None, channel: 
     '''
     Inspect the channel of the all nodes connected with the server
     '''
-    url_obj = inspect_url_of(server, rpc, channel)
+    url_obj = inspect_url_of(obj, server, rpc, channel)
     uri_obj = url_obj._replace(path="")
     url = url_obj.geturl()
     try:

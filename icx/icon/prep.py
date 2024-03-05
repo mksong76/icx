@@ -15,7 +15,7 @@ from iconsdk.builder.transaction_builder import CallTransactionBuilder
 from .. import service, util, wallet
 from ..config import CONTEXT_CONFIG, Config
 from ..cui import Column, MapPrinter, Row, Header, RowPrinter
-from ..network import CONTEXT_NETWORK
+from ..network import CONTEXT_NETWORK, CONTEXT_NODE_SEED
 
 GRADE_TO_TYPE = {
     "0x0": "Main",
@@ -80,9 +80,7 @@ PREPS_JSON="~/.preps.{network}.json"
 P2P="p2p"
 RPC="rpc"
 
-CONTEXT_PREP_SEEDS='prep.seeds'
 CONTEXT_PREP_STORE='prep.store'
-CONFIG_PREP_SEEDS='prep.seeds'
 
 def p2p_to_rpc(server: str) -> str:
     ip, port = tuple(server.split(':'))
@@ -204,53 +202,6 @@ class PRep(dict):
     @property
     def delegation_required(self) -> int:
         return self.delegated-(self.bonded*19)
-
-
-@click.command('seeds')
-@click.pass_obj
-@click.argument('network', type=click.STRING, required=False)
-@click.argument('server', nargs=-1)
-@click.option('--delete', '-d', type=click.BOOL, is_flag=True, default=False)
-def set_seed(obj: dict, network: str = None, delete: bool = None, server: List[str] = None):
-    '''
-    Manage seed server configurations for networks
-    '''
-    config: Config = obj[CONTEXT_CONFIG]
-    prep_seeds: dict = config[CONFIG_PREP_SEEDS]
-
-    if network is None:
-        if len(prep_seeds) == 0:
-            click.echo(f'No seed servers are registered')
-            return
-        columns = [
-            Column(lambda name, info: name, 10, name='Name'),
-            Column(lambda name, info: ",".join(info), 60, name='Seed servers'),
-        ]
-        printer = RowPrinter(columns)
-        printer.print_separater()
-        printer.print_header()
-        printer.print_separater()
-        for name, value in prep_seeds.items():
-            printer.print_data(name, value)
-            printer.print_separater()
-        return
-
-    if len(server) == 0:
-        if network in prep_seeds:
-            if delete:
-                del prep_seeds[network]
-                config[CONFIG_PREP_SEEDS] = prep_seeds
-                click.echo(f'Seed servers for [{network}] is deleted')
-            else:
-                seeds: List[str] = prep_seeds[network]
-                click.echo(f'Seed servers for [{network}] : {" ".join(seeds)}')
-        else:
-            click.secho(f'No seed servers for [{network}]', color='red', file=sys.stderr)
-        return
-
-    prep_seeds[network] = server
-    config[CONFIG_PREP_SEEDS] = prep_seeds
-    click.echo(f'Seed servers for [{network}] are set')
 
 def load_prep_store(file: str):
     with open(file, "r") as fd:
@@ -456,15 +407,6 @@ def handlePReps(obj: dict, store: str):
             network = 'default'
         store = PREPS_JSON.format(network=network)
     obj[CONTEXT_PREP_STORE] = path.expanduser(store)
-
-    # if network is specified, then SEEDs also need to be set
-    if CONTEXT_NETWORK in obj:
-        network: str = obj[CONTEXT_NETWORK]
-        config: Config = obj[CONTEXT_CONFIG]
-        prep_seeds: dict = config[CONFIG_PREP_SEEDS]
-
-        if network in prep_seeds:
-            obj[CONTEXT_PREP_SEEDS] = prep_seeds[network]
 
 def parse_str_to_bytes(s: str) -> bytes:
     if s.startswith('0x'):

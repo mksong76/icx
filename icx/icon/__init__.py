@@ -33,7 +33,6 @@ assets.add_command(asset.show_price)
 def preps(ctx: click.Context, store: str = None):
     ctx.ensure_object(dict)
     prep.handlePReps(ctx.obj, store)
-preps.add_command(prep.set_seed)
 preps.add_command(prep.get_prep)
 preps.add_command(prep.inspect_prep)
 preps.add_command(prep.register_pubkey)

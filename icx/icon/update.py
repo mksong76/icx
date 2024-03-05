@@ -204,8 +204,8 @@ def update_preps_json(obj: dict, server: List[str]):
     store = obj[CONTEXT_PREP_STORE]
     preps = PReps()
     if len(server) == 0:
-        if CONTEXT_PREP_SEEDS in obj:
-            server = obj[CONTEXT_PREP_SEEDS]
+        if CONTEXT_NODE_SEED in obj:
+            server = obj[CONTEXT_NODE_SEED]
         else:
             server = SEED_SERVERS
     preps.update_preps(server)
