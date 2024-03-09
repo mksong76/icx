@@ -11,7 +11,7 @@ from typing import  Dict, List, Tuple
 import click
 from iconsdk.builder.call_builder import CallBuilder
 
-from ..inspect import is_private_ip
+from ..inspect import is_private_p2p
 from . import duration
 from .prep import *
 
@@ -182,7 +182,7 @@ class PReps:
             th.join()
 
     def inspect_server(self, ip:str, src:str):
-        if is_private_ip(ip):
+        if is_private_p2p(ip):
             return
         th = threading.Thread(target=self.analyze_server, args=[ip, src])
         self.threads.append(th)
