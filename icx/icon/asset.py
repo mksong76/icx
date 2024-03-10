@@ -2,6 +2,7 @@
 
 import json
 import locale
+import os
 import sys
 from datetime import timedelta
 from typing import List, Optional, Tuple, Union
@@ -300,9 +301,9 @@ def show_asset_of(addr: str):
     p.print_data(['PRICE', ICX, 0.0], reverse=True)
 
 @click.command("auto")
-@click.option("--stake", 'target', type=int, help="Amount to stake (negative for asset-X)")
-@click.option("--noclaim", type=bool, is_flag=True)
-@click.option('--preps', '-p', type=str, multiple=True)
+@click.option("--stake", 'target', type=int, metavar='<amount>', help="Amount to stake in ICX (negative for asset-X)")
+@click.option("--noclaim", type=bool, is_flag=True, help='Prevent claimIScore()')
+@click.option('--preps', '-p', type=str, multiple=True, metavar='<prep1>,<prep2>....', help='List of PReps for delegation')
 @click.pass_obj
 def stake_auto(ctx: dict, preps: List[str] = None, target: int = None,  noclaim: bool = False):
     service = AssetService()
@@ -416,6 +417,9 @@ def show_delegation(ctx: dict):
         p.print_data(entry, prep, underline=True)
 
 def handleAssetKeyStore(obj: dict, key_store: Union[str,None] = None):
+    if key_store is None and wallet.CONTEXT_KEYSTORE not in obj:
+        key_store = os.environ.get('ICX_ASSET_KEY_STORE')
+
     if key_store is not None:
         obj[CONTEXT_ASSET] = wallet.get_instance(key_store)
     else:

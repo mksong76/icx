@@ -15,7 +15,7 @@ main.add_command(proposal.main)
 proposal_main = proposal.main
 
 @click.group('asset', help='ICON Asset related operations')
-@click.option('--key_store', '--ks', envvar='ICX_ASSET_KEY_STORE')
+@click.option('--key_store', '--ks', metavar='<name>|<file>', help='KeyStore for asset')
 @click.pass_context
 def assets(ctx: click.Context, key_store: str = None):
     ctx.ensure_object(dict)
