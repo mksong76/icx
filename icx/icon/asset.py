@@ -224,10 +224,20 @@ def show_asset(ctx: dict, address: List[str]):
         wallet: Wallet = ctx[CONTEXT_ASSET]
         address = [ wallet.get_address() ]
     for item in address:
-        show_asset_of(item)
+        show_asset_of(ctx, item)
 
-def show_asset_of(addr: str):
+def show_asset_of(ctx: dict, addr: str):
     addr = ensure_address(addr)
+    config: Config = ctx[CONTEXT_CONFIG]
+    target: Optional[int] = get_stake_target(config, addr, None)
+    stake_desc = ''
+    balance_desc = ''
+    if target is not None:
+        if target > 0:
+            stake_desc = f'>> {target:.3f} ICX'
+        else:
+            balance_desc = f'>> {(-target):.3f} ICX'
+
 
     service = AssetService()
     balance = service.get_balance(addr)
@@ -250,7 +260,7 @@ def show_asset_of(addr: str):
     entries = []
     if asset > 0 :
         entries += [
-            [ 'BALANCE', balance, balance/asset ],
+            [ 'BALANCE', balance, balance/asset, balance_desc ],
             [ 'CLAIMABLE', claimable, claimable/asset ],
         ]
         if unstaking > 0:
@@ -260,7 +270,7 @@ def show_asset_of(addr: str):
             ]
         if staked > 0:
             entries += [
-                [ 'STAKED', staked, staked/asset ],
+                [ 'STAKED', staked, staked/asset, stake_desc ],
                 [ '- DELEGATED', delegated, delegated/staked ],
                 [ '- BONDED', bonded, bonded/staked ],
                 [ '- REMAINS', voting_power, voting_power/staked ],
