@@ -154,6 +154,8 @@ class DecimalType(click.ParamType):
                     return int(float(s_value)*self.__mag)
                 else:
                     return int(s_value.replace(',', '_'), 0)*self.__mag
+            else:
+                return int(s_value.replace(',', '_'), 0)
         except ValueError:
             self.fail(f'{value} is not a valid integer', param, ctx)
 
