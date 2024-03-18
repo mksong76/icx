@@ -58,10 +58,10 @@ class JailFlag:
     DoubleSign = 8
 
     NAMES = {
-        Jailed: 'jailed',
-        Unjailing: 'unjailing',
-        LowProductivity: 'lowProductivity',
-        DoubleSign: 'doubleSign',
+        Jailed: 'Jailed',
+        Unjailing: 'Unjailing',
+        LowProductivity: 'LowProductivity',
+        DoubleSign: 'DoubleSign',
     }
 
     @classmethod
@@ -331,7 +331,7 @@ def get_prep(obj: dict, key: str, raw: bool, bonders: bool, height: str):
         if jail_flags is not None and jail_flags != 0:
             jail_flag_list = list(JailFlag.from_flags(jail_flags))
             jail_flags_str = ", ".join(
-                map(lambda x: JailFlag.as_name(x).capitalize(), jail_flag_list)
+                map(lambda x: JailFlag.as_name(x), jail_flag_list)
             )
             rows += [
                 Header('Jail Info', 0),
