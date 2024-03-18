@@ -180,7 +180,7 @@ def sum_delegation(delegation: dict) -> Tuple[int, int]:
     votingPower = int(delegation['votingPower'], 0)
     return delegated, votingPower
 
-def sum_bond(bond: dict) -> Tuple[int, int, int]:
+def sum_bond(bond: dict) -> Tuple[int, int, int, int]:
     bonded = int(bond['totalBonded'], 0)
     unbonding = 0
     expire_height = 0
@@ -259,15 +259,18 @@ def show_asset_of(ctx: dict, addr: str):
 
     entries = []
     if asset > 0 :
+        unstaked = balance+claimable+unstaking
         entries += [
-            [ 'BALANCE', balance, balance/asset, balance_desc ],
-            [ 'CLAIMABLE', claimable, claimable/asset ],
+            [ 'UNSTAKED', unstaked, unstaked/asset, balance_desc ],
+            [ '- BALANCE', balance, balance/unstaked, balance_desc ],
+            [ '- CLAIMABLE', claimable, claimable/unstaked ],
         ]
         if unstaking > 0:
             remaining_time = timedelta(seconds=remaining_blocks*2)
             entries += [
-                [ 'UNSTAKE', unstaking, unstaking/asset, f'{remaining_time}'],
+                [ '- UNSTAKING', unstaking, unstaking/unstaked, f'{remaining_time}'],
             ]
+
         if staked > 0:
             entries += [
                 [ 'STAKED', staked, staked/asset, stake_desc ],
@@ -281,10 +284,6 @@ def show_asset_of(ctx: dict, addr: str):
                 entries += [
                     [ '- UNBONDING', unbonding, unbonding/staked, f'{remaining_time}' ],
                 ]
-    entries += [
-        [ 'ASSET', asset, 1.0 ],
-    ]
-
     locale.setlocale(locale.LC_ALL, '')
     try :
         sym, price = upbit.getPrice('ICX')
@@ -308,14 +307,15 @@ def show_asset_of(ctx: dict, addr: str):
         if entry[1] == 0 and entry[2] == 0:
             continue
         p.print_data(entry, underline=True)
-    p.print_data(['PRICE', ICX, 0.0], reverse=True)
+    p.print_data(['ASSET', asset, 1.0, f'1 ICX = {price} {sym}'], reverse=True)
 
 @click.command("auto")
 @click.option("--stake", 'target', type=int, metavar='<amount>', help="Amount to stake in ICX (negative for asset-X)")
 @click.option("--noclaim", type=bool, is_flag=True, help='Prevent claimIScore()')
 @click.option('--preps', '-p', type=str, multiple=True, metavar='<prep1>,<prep2>....', help='List of PReps for delegation')
+@click.option("--vpower", 'vpower', type=int, default=0, metavar='<amount>', help="Target voting power in ICX")
 @click.pass_obj
-def stake_auto(ctx: dict, preps: List[str] = None, target: int = None,  noclaim: bool = False):
+def stake_auto(ctx: dict, preps: List[str] = None, vpower: int = 0, target: int = None,  noclaim: bool = False):
     service = AssetService()
     config: Config = ctx[CONTEXT_CONFIG]
     wallet: Wallet = ctx[CONTEXT_ASSET]
@@ -346,11 +346,13 @@ def stake_auto(ctx: dict, preps: List[str] = None, target: int = None,  noclaim:
     delegation = service.get_delegation(wallet.address)
     voting_power = int(delegation['votingPower'], 0)
     staked, unstaking, _ = sum_stake(stakes)
+    bond = service.get_bond(wallet.address)
+    bonded, unbonding, _, _ = sum_bond(bond)
 
     if target is None:
         min_balance = balance+unstaking
     elif target >= 0:
-        min_balance = balance+staked+unstaking-target*ICX
+        min_balance = balance+staked+unstaking-(target+1)*ICX
     else:
         min_balance = -target*ICX
     if min_balance < ICX:
@@ -362,12 +364,12 @@ def stake_auto(ctx: dict, preps: List[str] = None, target: int = None,  noclaim:
     if balance+unstaking > max_balance:
         print(f'[-] Staking MORE {(balance+unstaking-max_balance)/ICX:+.3f}', file=sys.stderr)
         service.stake_all(wallet, max_balance, stakes)
-        service.delegate_all(preps, wallet, 0)
+        service.delegate_all(preps, wallet, vpower*ICX)
     elif balance+unstaking < min_balance:
         print(f'[-] Staking LESS {(balance+unstaking-max_balance)/ICX:+.3f}', file=sys.stderr)
         if balance+unstaking+voting_power < min_balance:
             voting_power = max_balance-unstaking-balance
-            service.delegate_all(preps, wallet, voting_power)
+            service.delegate_all(preps, wallet, voting_power+vpower*ICX)
         target_balance = service.get_balance(wallet.address)
         target_balance += voting_power+unstaking
         service.stake_all(wallet, target_balance, stakes)
@@ -379,7 +381,7 @@ def stake_auto(ctx: dict, preps: List[str] = None, target: int = None,  noclaim:
     balance = service.get_balance(wallet.address)
     staked, unstaking, remaining_blocks = sum_stake(stakes)
 
-    asset = claimable + balance + staked + unstaking
+    asset = claimable + balance + staked + unstaking + bonded + unbonding
     remains = timedelta(seconds=remaining_blocks*2)
 
     locale.setlocale(locale.LC_ALL, '')
@@ -437,11 +439,11 @@ def handleAssetKeyStore(obj: dict, key_store: Union[str,None] = None):
 
 @click.command('price')
 @click.argument('amount', type=DecimalType('icx', 18))
-@click.option('--market')
+@click.option('--market', type=str)
 def show_price(amount: int, market: str = None):
     locale.setlocale(locale.LC_ALL, '')
     try :
-        sym, price = upbit.getPrice('ICX', market)
+        sym, price = upbit.getPrice('ICX', market if market is not None else 'KRW')
     except:
         sym = 'ICX'
         price = 1
