@@ -20,6 +20,36 @@ class PRep:
         self.prep = prep
         self.futures = []
 
+PENALTY_REASON_TO_CHECK = {
+    JailFlag.Unjailing: "UnJa",
+    JailFlag.DoubleSign: "DblS",
+    JailFlag.LowProductivity: "LowP",
+}
+
+def candidate_reason_of_prep(prep: dict) -> Optional[str]:
+    penalty = prep.get('penalty')
+    if  penalty is None or penalty == '0x0':
+        return None
+    if 'hasPublicKey' in prep:
+        if prep['hasPublicKey'] == '0x0':
+            return "NoPk"
+    jail_flags = as_int(prep.get('jailFlags'))
+    if jail_flags is None or jail_flags == 0:
+        return PENALTY_TO_STR[penalty]
+    flags = list(JailFlag.from_flags(jail_flags))
+    for flag, reason in PENALTY_REASON_TO_CHECK.items():
+        if flag in flags:
+            return reason
+    return PENALTY_TO_STR[penalty]
+
+def type_of_prep(prep: dict) -> str:
+    grade = prep['grade']
+    if grade == '0x2':
+        reason = candidate_reason_of_prep(prep)
+        if reason is not None:
+            return reason[0:4]
+    return GRADE_TO_TYPE[grade]
+
 @click.command('status')
 @click.pass_obj
 @click.option('--version', type=str)
@@ -82,7 +112,7 @@ def show_status(obj: dict, version: str, timeout: float):
             else:
                 items.append(PRep({
                     'name': prep['name'],
-                    'type': GRADE_TO_TYPE[prep['grade']],
+                    'type': type_of_prep(prep),
                     'power': int(prep['power'], 0),
                     'ip': NO_IP,
                 }))
@@ -93,7 +123,7 @@ def show_status(obj: dict, version: str, timeout: float):
             if int(prep['power'], 0) > 0:
                 items.append(PRep({
                     'name': prep['name'],
-                    'type': GRADE_TO_TYPE[prep['grade']],
+                    'type': type_of_prep(prep),
                     'power': int(prep['power'], 0),
                     'ip': NO_IP,
                 }))
@@ -103,7 +133,7 @@ def show_status(obj: dict, version: str, timeout: float):
 
         item = PRep({
             'name': prep['name'],
-            'type': GRADE_TO_TYPE[prep['grade']],
+            'type': type_of_prep(prep),
             'power': int(prep['power'], 0),
             'ip': server_to_ip(info[P2P]),
         })
