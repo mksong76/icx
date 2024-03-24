@@ -253,13 +253,12 @@ def do_transfer(wallet: Wallet, to: str, amount: str):
     ).build()
     click.echo(f'Transfering {util.format_decimals(value, 3)} ICX of {owner} to {to}')
     signed_tx = SignedTransaction(tx, wallet)
-    util.dump_json(signed_tx.signed_transaction_dict)
-    # result = svc.send_transaction_and_pull(signed_tx)
-    # util.dump_json(result)
+    result = svc.send_transaction_and_pull(signed_tx)
+    util.dump_json(result)
 
 @click.command('transfer', help="Transfer native token")
 @click.argument('amount', metavar='<amount>', type=click.STRING)
-@click.argument('to', metavar='<to>', type=util.ADDRESS)
+@click.argument('to', metavar='<to>', type=wallet.ADDRESS)
 def transfer(to: str, amount: str):
     '''
     Transfer specified amount of native coin to specified user.

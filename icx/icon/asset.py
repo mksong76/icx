@@ -452,7 +452,7 @@ def show_price(amount: int, market: str = None):
 
 @click.command('transfer')
 @click.argument('amount', type=click.STRING, metavar='<amount>')
-@click.argument('to', type=ADDRESS)
+@click.argument('to', type=wallet.ADDRESS)
 @click.pass_obj
 def transfer(obj: dict, to: str, amount: str):
     '''
@@ -465,4 +465,4 @@ def transfer(obj: dict, to: str, amount: str):
     - "<X>" for <X> LOOP.
     '''
     wallet = obj[CONTEXT_ASSET]
-    basic.transfer(wallet, to, amount)
+    basic.do_transfer(wallet, to, amount)

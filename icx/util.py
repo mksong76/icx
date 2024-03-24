@@ -16,8 +16,8 @@ GOV_SCORE = 'cx0000000000000000000000000000000000000001'
 ICX = 10**18
 
 defined_addresses = {
-    'gov_score': GOV_SCORE,
-    'chain_score': CHAIN_SCORE,
+    'gov': GOV_SCORE,
+    'chain': CHAIN_SCORE,
 }
 
 def ensure_address(addr: str) -> str:

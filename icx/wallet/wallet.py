@@ -10,10 +10,12 @@ import click
 from iconsdk.wallet.wallet import KeyWallet, Wallet
 from eth_keyfile import  extract_key_from_keyfile
 
+from .. import util
 from icx.config import CONTEXT_CONFIG, Config
 from icx.cui import Column, RowPrinter
 
 CONFIG_KEYSTORES='wallets'
+CONFIG_BOOKMARK='bookmark'
 CONTEXT_KEYSTORE='keystore.name'
 
 def load_wallet_from_dict(src: dict, pw: str) -> Wallet:
@@ -205,3 +207,62 @@ def main(obj: dict, name: str = None, file: str = None, delete: bool = None, ver
         keystores[name] = keystore
         config[CONFIG_KEYSTORES] = keystores
         click.echo(f'Wallet {name} is set as addr={keystore["address"]}')
+
+@click.command('bookmark')
+@click.argument('name', metavar='[<name>]', type=click.STRING, required=False)
+@click.argument('addr', metavar='[<address>]', type=util.ADDRESS, required=False)
+@click.option('--delete', '-d', type=click.BOOL, is_flag=True, default=False)
+@click.pass_obj
+def bookmark_main(obj: dict, name: str, addr: str, delete: bool):
+    config = obj[CONTEXT_CONFIG]
+    keystores = config.get(CONFIG_KEYSTORES)
+    bookmark = config.get(CONFIG_BOOKMARK)
+    if name is None:
+        columns = [
+            Column(lambda t, k, v: t.upper(),  2, format='{:2^}',name='Type'),
+            Column(lambda t, k, v: k, 20, name='Name'),
+            Column(lambda t, k, v: v, 42, name='Address'),
+        ]
+        printer = RowPrinter(columns)
+        printer.print_header()
+        for k, v in keystores.items():
+            printer.print_data('ks', k, v['address'], underline=True)
+            # click.echo(f'{k}={v["address"]}')
+        for k, v in bookmark.items():
+            printer.print_data('bk', k, v, underline=True)
+            # click.echo(f'{k}={v}')
+        return
+
+    if delete:
+        if name in bookmark:
+            del(bookmark, name)
+            config[CONFIG_BOOKMARK] = bookmark
+        else:
+            click.secho(f'No bookmark named {name}', color='red', file=sys.stderr)
+            return
+
+    if addr is None:
+        click.echo(f'{name}={bookmark[name]}')
+        return
+    bookmark[name] = addr
+    config[CONFIG_BOOKMARK] = bookmark
+
+def ensure_address(addr: str) -> str:
+    ctx = click.get_current_context()
+    config = ctx.obj[CONTEXT_CONFIG]
+    bookmark = config.get(CONFIG_BOOKMARK)
+    if addr in bookmark:
+        return bookmark[addr]
+    keystore = config.get(CONFIG_KEYSTORES)
+    if addr in keystore:
+        return keystore[addr]['address']
+    return util.ensure_address(addr)
+
+class AddressType(click.ParamType):
+    name = "address"
+    def convert(self, value, param, ctx) -> str:
+        if value is None:
+            return None
+        return ensure_address(value)
+
+ADDRESS = AddressType()
