@@ -533,7 +533,7 @@ def show_rewards_of(address: str, *, height: int = None, terms: int = 7):
     p.print_row([
         (2, 'ADDRESS', '>'),
         (3, address, '<'),
-    ], reverse=True)
+    ], reverse=True, underline=True)
     p.print_header()
 
     for info in rewards:
