@@ -472,6 +472,17 @@ def get_rewards_of(address: str, *, height: int = None, terms: int = 5) -> Itera
     ).build())
     term_start = as_int(term_info['startBlockHeight'])
     term_seq = as_int(term_info['sequence']) - 2
+    latest_claimable = as_int(svc.call(
+        CallBuilder(
+            to=CHAIN_SCORE,
+            method="queryIScore",
+            params={
+                "address": address,
+            },
+            height=height,
+        ).build()
+    )['estimatedICX'])
+    claimed = False
 
     while terms > 0:
         iiss_info = svc.call(
@@ -501,52 +512,82 @@ def get_rewards_of(address: str, *, height: int = None, terms: int = 5) -> Itera
                 height=term_start+1,
             ).build()
         )
-        reward = as_int(new_iscore['estimatedICX']) - as_int(old_iscore['estimatedICX'])
+        claimable = as_int(new_iscore['estimatedICX'])
+        old_claimable = as_int(old_iscore['estimatedICX'])
+        reward = claimable - old_claimable
         blk = svc.get_block(rc_start)
         dt = util.datetime_from_ts(blk['time_stamp'])
+
+        claim = claimable-latest_claimable
+        claimed = True if claim>0 else claimed
         yield {
             'start': rc_start,
             'end': rc_end,
             'sequence': term_seq-2,
             'reward': reward,
+            'claimed': claimed,
+            'claim': claim,
+            'claimable': latest_claimable,
             'timestamp': dt.astimezone(),
         }
+        latest_claimable = old_claimable
         term_start = rc_end+1
         term_seq -= 1
         terms -= 1
 
 def show_rewards_of(address: str, *, height: int = None, terms: int = 7):
+    def claim_field(e:dict) -> str:
+        value = None
+        if e['claim'] > 0:
+            value = e['claim']
+        # elif e.get('is_last') and e['claimable'] > 0:
+        #     value = e['claimable']
+        else:
+            return ''
+        return f'{format_decimals(value,3)} ICX'
+
     columns = [
-        Column(lambda e: e['sequence'], 8, '{:>8}', "Seq"),
+        Column(lambda e: e['sequence'], 6, '{:>6}', "Seq"),
         Column(lambda e: e['start'], 10, '{:>10}', "Start"),
         Column(lambda e: e['end'], 10, '{:>10}', "End"),
         Column(lambda e: str(e['timestamp']), 19, '{:<19}', "Start Time"),
         Column(lambda e: format_decimals(e['reward'],3), 20, '{:>16} ICX', "Reward"),
+        Column(lambda e: claim_field(e), 20, '{:>}', "Claimed"),
     ]
 
     rewards = list(get_rewards_of(address, height=height, terms=terms))
-
-    p = RowPrinter(columns)
+    if len(rewards) == 0:
+        click.echo('No rewards')
+        return
+    claimable = rewards[0]['claimable']
     rewards.reverse()
     reward_sum = 0
 
+    p = RowPrinter(columns)
     p.print_row([
         (2, 'ADDRESS', '>'),
-        (3, address, '<'),
+        (4, address, '<'),
     ], reverse=True, underline=True)
     p.print_header()
 
     for info in rewards:
         reward_sum += info['reward']
-        p.print_data(info, underline=True)
+        fg = 'yellow' if not info['claimed'] else None
+        p.print_data(info, fg=fg, underline=info["claim"]>0)
 
     sym, price = get_price()
     reward_price = int(price*reward_sum)
+    claimable_price = int(price*claimable)
 
     p.print_row([
-        (3, f'Total Reward', '>'),
-        (1, f'{format_decimals(reward_price,0)} {sym}', '>'),
+        (4, f'Total Reward / Claimable', '>'),
         (1, f'{format_decimals(reward_sum,3)} ICX', '>'),
+        (1, f'{format_decimals(claimable,3)} ICX', '>'),
+    ], reverse=True)
+    p.print_row([
+        (4, f'1 ICX = {price:,d} KRW', '>'),
+        (1, f'{format_decimals(reward_price,0)} {sym}', '>'),
+        (1, f'{format_decimals(claimable_price,0)} {sym}', '>'),
     ], reverse=True)
 
 @click.command('reward')
