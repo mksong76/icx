@@ -4,21 +4,20 @@ import json
 import locale
 import os
 import sys
-from datetime import timedelta
-from typing import List, Optional, Tuple, Union
+from datetime import datetime, timedelta
+from typing import Iterable, List, Optional, Tuple, Union
 
 import click
 from iconsdk.builder.call_builder import CallBuilder
 from iconsdk.builder.transaction_builder import CallTransactionBuilder
 from iconsdk.wallet.wallet import Wallet
 
-from .. import basic, service
+from .. import basic, service, util
 from ..config import CONTEXT_CONFIG, Config
-from ..market import upbit
-from ..util import CHAIN_SCORE, ICX, ensure_address, format_decimals, DecimalType
 from ..cui import Column, RowPrinter
 from ..market import upbit
-from ..util import ADDRESS, CHAIN_SCORE, ICX, ensure_address, format_decimals
+from ..util import (CHAIN_SCORE, ICX, DecimalType, dump_json,
+                    ensure_address, format_decimals)
 from ..wallet import wallet
 from .prep import PRep
 
@@ -216,8 +215,18 @@ def get_supporting_preps(config: Config, addr: str) -> List[str]:
     else:
         return None
 
+def get_price() -> tuple[str,int]:
+    locale.setlocale(locale.LC_ALL, '')
+    try :
+        sym, price = upbit.getPrice('ICX')
+    except:
+        sym = 'ICX'
+        price = 1
+    return sym, price
+
+
 @click.command('show')
-@click.argument('address', nargs=-1)
+@click.argument('address', type=wallet.ADDRESS, nargs=-1)
 @click.pass_obj
 def show_asset(ctx: dict, address: List[str]):
     if len(address) == 0:
@@ -284,13 +293,8 @@ def show_asset_of(ctx: dict, addr: str):
                 entries += [
                     [ '- UNBONDING', unbonding, unbonding/staked, f'{remaining_time}' ],
                 ]
-    locale.setlocale(locale.LC_ALL, '')
-    try :
-        sym, price = upbit.getPrice('ICX')
-    except:
-        print(f'[!] FAIL to get price of ICX', file=sys.stderr)
-        sym = 'ICX'
-        price = 1
+
+    sym, price = get_price()
 
     columns = [
         Column(lambda x: x[0], 13, '{:13s}', "Name"),
@@ -384,12 +388,7 @@ def stake_auto(ctx: dict, preps: List[str] = None, vpower: int = 0, target: int 
     asset = claimable + balance + staked + unstaking + bonded + unbonding
     remains = timedelta(seconds=remaining_blocks*2)
 
-    locale.setlocale(locale.LC_ALL, '')
-    try :
-        sym, price = upbit.getPrice('ICX')
-    except:
-        sym = 'ICX'
-        price = 1
+    sym, price = get_price()
     krw = (asset*price)//ICX
     print(f'[#] Asset={format_decimals(asset,3)} ( x {price:n} = {krw:n} {sym})', file=sys.stderr)
     print(f'[#] Balance={format_decimals(balance,3)} ' +
@@ -441,12 +440,7 @@ def handleAssetKeyStore(obj: dict, key_store: Union[str,None] = None):
 @click.argument('amount', type=DecimalType('icx', 18))
 @click.option('--market', type=str)
 def show_price(amount: int, market: str = None):
-    locale.setlocale(locale.LC_ALL, '')
-    try :
-        sym, price = upbit.getPrice('ICX', market if market is not None else 'KRW')
-    except:
-        sym = 'ICX'
-        price = 1
+    sym, price = get_price()
     value = price*amount//ICX
     click.echo(f'{value:n} {sym}')
 
@@ -466,3 +460,103 @@ def transfer(obj: dict, to: str, amount: str):
     '''
     wallet = obj[CONTEXT_ASSET]
     basic.do_transfer(wallet, to, amount)
+
+def as_int(v: Optional[str], d: Optional[int] = None) -> Optional[int]:
+    return d if v is None else int(v, 0)
+
+def get_rewards_of(address: str, *, height: int = None, terms: int = 5) -> Iterable[dict]:
+    svc = service.get_instance()
+
+    term_info = svc.call(CallBuilder(
+        to=CHAIN_SCORE, method='getPRepTerm', height=height
+    ).build())
+    term_start = as_int(term_info['startBlockHeight'])
+    term_seq = as_int(term_info['sequence']) - 2
+
+    while terms > 0:
+        iiss_info = svc.call(
+            CallBuilder(
+                to=CHAIN_SCORE, method="getIISSInfo", height=term_start+1
+            ).build()
+        )
+        rc_start = as_int(iiss_info['rcResult']['startBlockHeight'])
+        rc_end = as_int(iiss_info['rcResult']['endBlockHeight'])
+        old_iscore = svc.call(
+            CallBuilder(
+                to=CHAIN_SCORE,
+                method="queryIScore",
+                params={
+                    "address": address,
+                },
+                height=term_start,
+            ).build()
+        )
+        new_iscore = svc.call(
+            CallBuilder(
+                to=CHAIN_SCORE,
+                method="queryIScore",
+                params={
+                    "address": address,
+                },
+                height=term_start+1,
+            ).build()
+        )
+        reward = as_int(new_iscore['estimatedICX']) - as_int(old_iscore['estimatedICX'])
+        blk = svc.get_block(rc_start)
+        dt = util.datetime_from_ts(blk['time_stamp'])
+        yield {
+            'start': rc_start,
+            'end': rc_end,
+            'sequence': term_seq-2,
+            'reward': reward,
+            'timestamp': dt.astimezone(),
+        }
+        term_start = rc_end+1
+        term_seq -= 1
+        terms -= 1
+
+def show_rewards_of(address: str, *, height: int = None, terms: int = 7):
+    columns = [
+        Column(lambda e: e['sequence'], 8, '{:>8}', "Seq"),
+        Column(lambda e: e['start'], 10, '{:>10}', "Start"),
+        Column(lambda e: e['end'], 10, '{:>10}', "End"),
+        Column(lambda e: str(e['timestamp']), 19, '{:<19}', "Start Time"),
+        Column(lambda e: format_decimals(e['reward'],3), 20, '{:>16} ICX', "Reward"),
+    ]
+
+    rewards = list(get_rewards_of(address, height=height, terms=terms))
+
+    p = RowPrinter(columns)
+    rewards.reverse()
+    reward_sum = 0
+
+    p.print_row([
+        (2, 'ADDRESS', '>'),
+        (3, address, '<'),
+    ], reverse=True)
+    p.print_header()
+
+    for info in rewards:
+        reward_sum += info['reward']
+        p.print_data(info, underline=True)
+
+    sym, price = get_price()
+    reward_price = int(price*reward_sum)
+
+    p.print_row([
+        (3, f'Total Reward', '>'),
+        (1, f'{format_decimals(reward_price,0)} {sym}', '>'),
+        (1, f'{format_decimals(reward_sum,3)} ICX', '>'),
+    ], reverse=True)
+
+@click.command('reward')
+@click.argument('address', type=wallet.ADDRESS, nargs=-1)
+@click.option('--height', '-h', type=util.INT, default=None)
+@click.option('--terms', '-t', type=util.INT, default=7)
+@click.pass_obj
+def show_reward(obj: dict, address: list[str], height: int = None, terms: int = 5):
+    if len(address) == 0:
+        wallet: Wallet = obj[CONTEXT_ASSET]
+        address = [ wallet.get_address() ]
+    for item in address:
+        show_rewards_of(item, height=height, terms=terms)
