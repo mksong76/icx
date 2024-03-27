@@ -103,18 +103,20 @@ class RowPrinter:
         format_str = '| ' + ' | '.join(formats) + ' |'
         click.secho(format_str.format(*data), file=self.__file, **kwargs)
 
-    def print_row(self, cols: list[tuple[int,any]], **kwargs):
+    def print_row(self, cols: list[tuple[int,any,str]], **kwargs):
         formats = []
         values = []
         spanned = 0
         idx = 0
-        for size, value in cols:
+        for col in cols:
+            size, value, align = col if len(col)==3 else col + ('<',)
             spanned = 0
             for i in range(size):
                 c = self.__columns[i+idx]
                 spanned += c.size+3
             idx += size
-            formats.append(f'{{:{spanned-3}}}')
+            align = get_align_of(align)
+            formats.append(f'{{:{align}{spanned-3}}}')
             values.append(value)
         format_str = '| ' + ' | '.join(formats) + ' |'
         click.secho(format_str.format(*values), file=self.__file, **kwargs)
