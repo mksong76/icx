@@ -186,7 +186,11 @@ class MapPrinter:
                 format_str = self.__name_value_format(align)
 
                 name = row.name
-                lines = textwrap.wrap(value, self.__max_value)
+                texts = value.splitlines(True)
+                lines = []
+                for text in texts:
+                    text_lines = textwrap.wrap(text, self.__max_value)
+                    lines += text_lines
                 while len(lines) > 0:
                     line = lines.pop(0)
                     kwargs_line = dict(**kwargs)
