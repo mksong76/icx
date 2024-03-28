@@ -120,7 +120,7 @@ def summarize_content(c: dict) -> str:
 
     if name == 'networkScoreUpdate':
         value = { "address": value["address"], 'content': "..." }
-    return f'{name} {json.dumps(value)}'
+    return f'{name}\n{json.dumps(value, indent=2)}'
 
 
 
@@ -170,11 +170,13 @@ def list_proposals(*, raw: bool = False, all: bool = False):
         )
         proposals: list[Proposal] = map(lambda x: Proposal(x), ret['proposals'])
         if not all:
-            proposals = filter(lambda x: x.end_block_height>last_height, proposals) 
-        p.print_separater()
+            proposals = filter(lambda x: x.end_block_height>last_height, proposals)
+        proposals = list(proposals)
+        if len(proposals) == 0:
+            click.secho('No active proposal')
+            return
         for proposal in proposals:
-            p.print_data(proposal)
-        p.print_separater()
+            p.print_data(proposal, underline=True)
 
 
 @main.command("get")
