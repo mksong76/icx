@@ -30,10 +30,13 @@ assets.add_command(asset.show_reward)
 
 @click.group('prep', help="ICON PRep related operations")
 @click.option('--store', type=click.STRING, default=None, envvar='ICX_PREP_STORE', help='File to store PRep information')
+@click.option('--key_store', '--ks', metavar='<name>|<file>', help='KeyStore for PRep command')
 @click.pass_context
-def preps(ctx: click.Context, store: str = None):
+def preps(ctx: click.Context, key_store: str = None, store: str = None):
     ctx.ensure_object(dict)
     prep.handlePReps(ctx.obj, store)
+    asset.handleAssetKeyStore(ctx.obj, key_store)
+
 preps.add_command(prep.get_prep)
 preps.add_command(prep.inspect_prep)
 preps.add_command(prep.register_pubkey)

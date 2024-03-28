@@ -436,6 +436,10 @@ def handleAssetKeyStore(obj: dict, key_store: Union[str,None] = None):
     else:
         obj[CONTEXT_ASSET] = wallet.get_instance()
 
+def get_wallet() -> Wallet:
+    ctx = click.get_current_context()
+    return ctx.obj[CONTEXT_ASSET]
+
 @click.command('price')
 @click.argument('amount', type=DecimalType('icx', 18))
 @click.option('--market', type=str)

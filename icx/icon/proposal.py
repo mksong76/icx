@@ -2,20 +2,26 @@
 
 from datetime import timedelta
 import json
+import sys
 from typing import Any, Optional
 
 import click
 from iconsdk.builder.call_builder import CallBuilder
+from iconsdk.builder.transaction_builder import CallTransactionBuilder
 
+from . import asset
 from .. import cui, service, util
 
 
 @click.group("proposal")
-def main():
+@click.option('--key_store', '--ks', metavar='<name>|<file>', help='KeyStore for asset')
+@click.pass_context
+def main(ctx: click.Context, key_store: str = None):
     """
     Network Proposal related operations
     """
-    pass
+    ctx.ensure_object(dict)
+    asset.handleAssetKeyStore(ctx.obj, key_store)
 
 
 class Proposal(dict):
@@ -179,14 +185,92 @@ def list_proposals(*, raw: bool = False, all: bool = False):
             p.print_data(proposal, underline=True)
 
 
+def print_proposal(proposal: Proposal,  *, last_height: int = None):
+    if last_height is None:
+        svc = service.get_instance()
+        info = svc.get_network_info()
+        last_height = int(info["latest"], 0)
+
+    rows = [
+        cui.Header(lambda x: x["contents"]["title"], 0, "{:<}", "Title"),
+        cui.Row(lambda x: x["id"], 66, "{}", "ID"),
+        cui.Row(lambda x: x.status, 20, "{}", "Status"),
+        cui.Row(lambda x: x["proposerName"], 40, None, "Proposer"),
+        cui.Row(
+            lambda x: (
+                x.agree_token_rate * 100,
+                x.disagree_token_rate * 100,
+                x.novote_token_rate * 100,
+            ),
+            60,
+            "Agree: {:6.2f}% / Disagree: {:6.2f}% / NoVoters: {:6.2f}%",
+            "Voter Token",
+        ),
+        cui.Row(
+            lambda x: (
+                x.agree_count_rate * 100,
+                x.disagree_count_rate * 100,
+                x.novote_count_rate*100,
+                x.novote_count,
+            ),
+            60,
+            "Agree: {:6.2f}% / Disagree: {:6.2f}% / NoVoters: {:6.2f}% ({:d} PReps)",
+            "Voter Count",
+        ),
+        cui.Row(lambda x: x.get_remaining_time(last_height), 20, "{}", "Expire"),
+        cui.Row(
+            lambda x: x['contents']['description'], 60, None, 'Description'
+        ),
+    ]
+
+    contents: list[dict] = proposal.get_content()
+    idx = 1
+    for c in contents:
+        rows.append(cui.Row(summarize_content(c), 60, None, f'Content[{idx}]'))
+        idx += 1
+
+    apply: Optional[dict] = proposal.get("apply")
+    if apply is not None:
+        rows.append(cui.Header("Apply", 0))
+        rows += [
+            cui.Row(apply["name"], 40, "{}", "Applyer"),
+            cui.Row(apply["id"], 66, "{}", "TXHash"),
+            cui.Row(util.datetime_from_ts(apply["timestamp"]), 30, "{}", "When"),
+        ]
+
+    novoters: list[dict] = proposal["vote"]["noVote"]["list"]
+    if len(novoters) > 0:
+        rows.append(cui.Header("No Voters", 0))
+        idx = 0
+        for novoter in novoters:
+            name = novoter
+            try:
+                prep = svc.call(
+                    CallBuilder(
+                        to=util.CHAIN_SCORE,
+                        method="getPRep",
+                        params={"address": novoter},
+                    ).build()
+                )
+                name = f'{novoter} {prep["name"]:20.20}'
+            except:
+                raise
+            rows.append(cui.Row(name, 63, None, f"NoVoter[{idx+1}]"))
+            idx += 1
+
+
+    p = cui.MapPrinter(rows)
+    p.print_data(proposal, underline=True)
+
 @main.command("get")
 @click.option("--raw", is_flag=True)
 @click.option("--name", is_flag=True)
-@click.argument("id")
-def get_proposal(id: str, *, raw=False, name=False):
+@click.argument("id", metavar='<id>')
+def show_proposal(id: str, *, raw=False, name=False):
+    '''
+    Show the proposal of <id>
+    '''
     svc = service.get_instance()
-    info = svc.get_network_info()
-    last_height = int(info["latest"], 0)
 
     response = svc.call(
         CallBuilder(
@@ -198,74 +282,56 @@ def get_proposal(id: str, *, raw=False, name=False):
     if raw:
         util.dump_json(response)
     else:
-        proposal = Proposal(response)
-        rows = [
-            cui.Header(lambda x: x["contents"]["title"], 0, "{:<}", "Title"),
-            cui.Row(lambda x: x["id"], 66, "{}", "ID"),
-            cui.Row(lambda x: x.status, 20, "{}", "Status"),
-            cui.Row(lambda x: x["proposerName"], 40, None, "Proposer"),
-            cui.Row(
-                lambda x: (
-                    x.agree_token_rate * 100,
-                    x.disagree_token_rate * 100,
-                    x.novote_token_rate * 100,
-                ),
-                60,
-                "Agree: {:6.2f}% / Disagree: {:6.2f}% / NoVoters: {:6.2f}%",
-                "Voter Token",
-            ),
-            cui.Row(
-                lambda x: (
-                    x.agree_count_rate * 100,
-                    x.disagree_count_rate * 100,
-                    x.novote_count_rate*100,
-                    x.novote_count,
-                ),
-                60,
-                "Agree: {:6.2f}% / Disagree: {:6.2f}% / NoVoters: {:6.2f}% ({:d} PReps)",
-                "Voter Count",
-            ),
-            cui.Row(lambda x: x.get_remaining_time(last_height), 20, "{}", "Expire"),
-            cui.Row(
-                lambda x: x['contents']['description'], 60, None, 'Description'
-            ),
-        ]
+        print_proposal(Proposal(response))
 
-        contents: list[dict] = proposal.get_content()
-        idx = 1
-        for c in contents:
-            rows.append(cui.Row(summarize_content(c), 60, None, f'Content[{idx}]'))
-            idx += 1
+@main.command('vote')
+@click.argument('id', metavar='<id>')
+@click.option('--reject', is_flag=True, default=False)
+@click.pass_obj
+def vote_proposal(obj: dict, id: str, reject: bool = False):
+    '''
+    Vote on the proposal identified by <id>
+    '''
+    svc = service.get_instance()
+    w = asset.get_wallet()
 
-        apply: Optional[dict] = proposal.get("apply")
-        if apply is not None:
-            rows.append(cui.Header("Apply", 0))
-            rows += [
-                cui.Row(apply["name"], 40, "{}", "Applyer"),
-                cui.Row(apply["id"], 66, "{}", "TXHash"),
-                cui.Row(util.datetime_from_ts(apply["timestamp"]), 30, "{}", "When"),
-            ]
+    response = svc.call(
+        CallBuilder(
+            to=util.GOV_SCORE,
+            method="getProposal",
+            params={"id": id},
+        ).build()
+    )
+    proposal = Proposal(response)
+    novoters = proposal['vote']['noVote']['list']
 
-        novoters: list[dict] = proposal["vote"]["noVote"]["list"]
-        if len(novoters) > 0:
-            rows.append(cui.Header("No Voters", 0))
-            idx = 0
-            for novoter in novoters:
-                name = novoter
-                try:
-                    prep = svc.call(
-                        CallBuilder(
-                            to=util.CHAIN_SCORE,
-                            method="getPRep",
-                            params={"address": novoter},
-                        ).build()
-                    )
-                    name = f'{novoter} {prep["name"]:20.20}'
-                except:
-                    raise
-                rows.append(cui.Row(name, 63, None, f"NoVoter[{idx+1}]"))
-                idx += 1
+    if w.address not in novoters:
+        click.secho(f'You are not in no-voters', fg='red', file=sys.stderr)
+        return
 
+    print_proposal(proposal)
+    
+    vote = 0 if reject else 1
+    action = "REJECT" if reject else "ACCEPT"
 
-        p = cui.MapPrinter(rows)
-        p.print_data(proposal, underline=True)
+    if not click.confirm(f'Do you {action} the proposal?'):
+        return
+
+    tx = CallTransactionBuilder(
+        from_=w.address,
+        to=util.GOV_SCORE,
+        method="voteProposal",
+        params={
+            "id": id,
+            "vote": vote,
+        },
+        nid = svc.nid,
+    ).build()
+
+    result = svc.estimate_and_send_tx(tx, w)
+
+    id = result['txHash']
+    if result['status'] == '0x1':
+        click.secho(f'{action} the proposal identified by {id}', fg='green')
+    else:
+        util.dump_json(result)
