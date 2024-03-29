@@ -2,6 +2,7 @@
 
 import base64
 import json
+import math
 import sys
 from hashlib import sha3_256
 from os import path
@@ -24,7 +25,7 @@ GRADE_TO_TYPE = {
 }
 
 GRADE_TYPE_TO_PTR = {
-    'Main': 2,
+    'Main': 1,
     'Sub': 1,
     'Cand': 0,
 }
@@ -201,7 +202,7 @@ class PRep(dict):
     
     @property
     def delegation_required(self) -> int:
-        return self.delegated-(self.bonded*19)
+        return (self.bonded*19)-self.delegated
 
 def load_prep_store(file: str):
     with open(file, "r") as fd:
@@ -520,10 +521,10 @@ PREP_COLUMNS = [
     Column(lambda n, p: p.grade, 4, "{:<4.4s}", "Type" ),
     Column(lambda n, p: p.get('name', ''), 18, "{:<18.18s}", "Name" ),
     Column(lambda n, p: p.get('country', ''), 3, "{:<3.3s}", "C.C" ),
-    Column(lambda n, p: p.power//10**21, 12, "{:>11,d}k", "Power"),
-    Column(lambda n, p: p.bond_rate*100, 8, "{:>7.2f}%", "Bond %"),
+    Column(lambda n, p: p.power//10**21, 10, "{:>9,d}k", "Power"),
+    Column(lambda n, p: p.bonded//10**21, 10, "{:>9,d}k", "Bond"),
     Column(lambda n, p: p.get_voter_rate(1000)*100, 7, "{:>6.2f}%", "Voter %"),
-    Column(lambda n, p: p.delegation_required//10**21, 12, "{:>11,d}k", "Delegation"),
+    Column(lambda n, p: p.delegation_required//10**21, 12, "{:>11,d}k", "Vote Req"),
     Column(lambda n, p: p.commission_rate/100, 7, "{:>6.2f}%", 'Commission'),
 ]
 @click.command('list')
@@ -542,7 +543,6 @@ def list_preps(height: int = None, raw: bool = False, all: bool = False, addr: b
         util.dump_json(res)
         return
     preps: list[PRep] = list(map(lambda x: PRep(x), res['preps']))
-    bh = as_int(res['blockHeight'])
     columns = PREP_COLUMNS
     if addr:
         columns = columns[:]
@@ -564,9 +564,8 @@ def list_preps(height: int = None, raw: bool = False, all: bool = False, addr: b
     if voter:
         preps.sort(key=lambda x: (
             GRADE_TYPE_TO_PTR[x.grade],
-            x.voter_rate,
-            x.power,
-            -x.delegation_required,
+            x.voter_rate*math.log2(x.bonded+1),
+            x.delegation_required,
         ), reverse=True)
     for prep in preps:
         idx += 1
