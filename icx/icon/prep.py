@@ -13,10 +13,10 @@ import coincurve
 from iconsdk.builder.call_builder import CallBuilder
 from iconsdk.builder.transaction_builder import CallTransactionBuilder
 
+from . import asset
 from .. import service, util, wallet
-from ..config import CONTEXT_CONFIG, Config
 from ..cui import Column, MapPrinter, Row, Header, RowPrinter
-from ..network import CONTEXT_NETWORK, CONTEXT_NODE_SEED
+from ..network import CONTEXT_NETWORK
 
 GRADE_TO_TYPE = {
     "0x0": "Main",
@@ -235,7 +235,7 @@ def find_rpc(prep_info:dict) -> Union[str,None]:
 
 @click.command('get')
 @click.pass_obj
-@click.argument('key')
+@click.argument('key', metavar='[<search key>]', type=click.STRING, required=False)
 @click.option('--raw', is_flag=True)
 @click.option('--bonders', is_flag=True)
 @click.option('--height', type=str, default=None)
@@ -243,6 +243,8 @@ def get_prep(obj: dict, key: str, raw: bool, bonders: bool, height: str):
     '''
     Get PRep information
     '''
+    if key is None:
+        key = asset.get_wallet().get_address()
     prep_info = None
     try:
         prep_info = load_prep_store(obj[CONTEXT_PREP_STORE])

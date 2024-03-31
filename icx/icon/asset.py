@@ -230,7 +230,7 @@ def get_price() -> tuple[str,int]:
 @click.pass_obj
 def show_asset(ctx: dict, address: List[str]):
     if len(address) == 0:
-        wallet: Wallet = ctx[CONTEXT_ASSET]
+        wallet: Wallet = get_wallet()
         address = [ wallet.get_address() ]
     for item in address:
         show_asset_of(ctx, item)
@@ -322,7 +322,7 @@ def show_asset_of(ctx: dict, addr: str):
 def stake_auto(ctx: dict, preps: List[str] = None, vpower: int = 0, target: int = None,  noclaim: bool = False):
     service = AssetService()
     config: Config = ctx[CONTEXT_CONFIG]
-    wallet: Wallet = ctx[CONTEXT_ASSET]
+    wallet: Wallet = get_wallet()
     if target is None:
         target = get_stake_target(config, wallet.get_address(), None)
     else:
@@ -401,7 +401,7 @@ def stake_auto(ctx: dict, preps: List[str] = None, vpower: int = 0, target: int 
 @click.pass_obj
 def show_delegation(ctx: dict):
     service = AssetService()
-    wallet: Wallet = ctx[CONTEXT_ASSET]
+    wallet: Wallet = get_wallet()
     delegations = service.get_delegation(wallet.get_address())
     prep_info = service.service.call(CallBuilder(to=CHAIN_SCORE, method='getPReps').build())
     prep_map = {}
@@ -427,18 +427,15 @@ def show_delegation(ctx: dict):
         prep = PRep(prep_map[entry['address']])
         p.print_data(entry, prep, underline=True)
 
-def handleAssetKeyStore(obj: dict, key_store: Union[str,None] = None):
-    if key_store is None and wallet.CONTEXT_KEYSTORE not in obj:
-        key_store = os.environ.get('ICX_ASSET_KEY_STORE')
-
-    if key_store is not None:
-        obj[CONTEXT_ASSET] = wallet.get_instance(key_store)
-    else:
-        obj[CONTEXT_ASSET] = wallet.get_instance()
-
 def get_wallet() -> Wallet:
     ctx = click.get_current_context()
-    return ctx.obj[CONTEXT_ASSET]
+    obj = ctx.obj
+    if CONTEXT_ASSET not in obj:
+        if wallet.CONTEXT_KEYSTORE in obj:
+            return wallet.get_instance()
+        key_store = os.environ.get('ICX_ASSET_KEY_STORE')
+        obj[CONTEXT_ASSET] = wallet.get_instance(key_store)
+    return obj[CONTEXT_ASSET]
 
 @click.command('price')
 @click.argument('amount', type=DecimalType('icx', 18))
@@ -462,7 +459,7 @@ def transfer(obj: dict, to: str, amount: str):
     - "<X>icx" for <X> ICX.
     - "<X>" for <X> LOOP.
     '''
-    wallet = obj[CONTEXT_ASSET]
+    wallet = get_wallet()
     basic.do_transfer(wallet, to, amount)
 
 def as_int(v: Optional[str], d: Optional[int] = None) -> Optional[int]:
@@ -601,7 +598,7 @@ def show_rewards_of(address: str, *, height: int = None, terms: int = 7):
 @click.pass_obj
 def show_reward(obj: dict, address: list[str], height: int = None, terms: int = 5):
     if len(address) == 0:
-        wallet: Wallet = obj[CONTEXT_ASSET]
+        wallet: Wallet = get_wallet()
         address = [ wallet.get_address() ]
     for item in address:
         show_rewards_of(item, height=height, terms=terms)

@@ -15,7 +15,7 @@ from .cui import Column, Header, MapPrinter, Row, RowPrinter
 
 
 @click.command()
-@click.argument('addr', type=util.ADDRESS)
+@click.argument('addr', type=wallet.ADDRESS)
 @click.option('--full', type=click.BOOL, is_flag=True)
 @click.option('--height', type=util.INT)
 @click.option('--icx', is_flag=True)
@@ -150,14 +150,14 @@ def get_account(addr: str, svc: service.Service = None) -> List[Row]:
     return rows
 
 @click.command('account', help='Show account information')
-@click.argument('addr', metavar='<address>', type=util.ADDRESS)
+@click.argument('addr', metavar='<address>', type=wallet.ADDRESS)
 def show_account(addr: str):
     rows = get_account(addr)
     rows.append(Header('END', 3))
     MapPrinter(rows).print_data(None)
 
 @click.command('deploy', help='Deploy contract')
-@click.option('--to', metavar='<to>', type=util.ADDRESS)
+@click.option('--to', metavar='<to>', type=wallet.ADDRESS)
 @click.option('--value', metavar='<value>', type=util.INT)
 @click.option('--type', metavar='<contract type>', type=click.STRING)
 @click.argument('score', metavar='<score file>', type=click.STRING)

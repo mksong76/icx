@@ -4,13 +4,13 @@ from datetime import timedelta
 import click
 
 
-from .. import service, util, basic
+from .. import service, util, basic, wallet
 from ..cui import Header, Row, MapPrinter
 from .asset import AssetService, sum_delegation, sum_stake
 from iconsdk.builder.call_builder import CallBuilder
 
 @click.command('account', help='ICON account information')
-@click.argument('addr', type=util.ADDRESS)
+@click.argument('addr', type=wallet.ADDRESS)
 def show_account(addr: str):
     svc = service.get_instance()
     asset = AssetService(svc)

@@ -21,7 +21,6 @@ def main(ctx: click.Context, key_store: str = None):
     Network Proposal related operations
     """
     ctx.ensure_object(dict)
-    asset.handleAssetKeyStore(ctx.obj, key_store)
 
 
 class Proposal(dict):

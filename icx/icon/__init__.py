@@ -19,7 +19,6 @@ proposal_main = proposal.main
 @click.pass_context
 def assets(ctx: click.Context, key_store: str = None):
     ctx.ensure_object(dict)
-    asset.handleAssetKeyStore(ctx.obj, key_store)
 
 assets.add_command(asset.show_asset)
 assets.add_command(asset.transfer)
@@ -35,7 +34,6 @@ assets.add_command(asset.show_reward)
 def preps(ctx: click.Context, key_store: str = None, store: str = None):
     ctx.ensure_object(dict)
     prep.handlePReps(ctx.obj, store)
-    asset.handleAssetKeyStore(ctx.obj, key_store)
 
 preps.add_command(prep.get_prep)
 preps.add_command(prep.inspect_prep)
