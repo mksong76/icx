@@ -138,3 +138,10 @@ def set_seed(obj: dict, network: str = None, delete: bool = None, server: List[s
     prep_seeds[network] = server
     config[CONFIG_NODE_SEEDS] = prep_seeds
     click.echo(f'Seed servers for [{network}] are set')
+
+def get_seeds(obj: dict = None):
+    if obj is None:
+        obj = click.get_current_context().obj
+    if CONTEXT_NODE_SEED in obj:
+        return obj[CONFIG_NODE_SEEDS]
+    return None

@@ -11,6 +11,8 @@ from typing import  Dict, List, Tuple
 import click
 from iconsdk.builder.call_builder import CallBuilder
 
+from ..import network
+
 from ..inspect import is_private_p2p
 from . import duration
 from .prep import *
@@ -207,9 +209,6 @@ def update_preps_json(obj: dict, server: List[str]):
     store = obj[CONTEXT_PREP_STORE]
     preps = PReps()
     if len(server) == 0:
-        if CONTEXT_NODE_SEED in obj:
-            server = obj[CONTEXT_NODE_SEED]
-        else:
-            server = SEED_SERVERS
+        server = network.get_seeds(obj) or SEED_SERVERS
     preps.update_preps(server)
     preps.dump(os.path.expanduser(store))
