@@ -50,6 +50,7 @@ PENALTY_TO_STR = {
     "0x2": "LowProductivity",
     "0x3": "BlockValidation",
     "0x4": "NonVote",
+    "0x5": "DoubleSign",
 }
 
 class JailFlag:
@@ -592,3 +593,152 @@ def list_preps(height: int = None, raw: bool = False, all: bool = False, addr: b
         (1, f'{len(preps):>3d}'),
         (printer.columns-1, f'Main:{main_count} Sub:{sub_count} Cand:{cand_count}'),
     ], reverse=True)
+
+
+@click.command('term')
+@click.pass_obj
+@click.option('--height', type=str, default=None)
+def show_term(obj: dict, height: str):
+    if height is not None:
+        height = int(height, 0)
+    svc = service.get_instance()
+    term = svc.call(CallBuilder(
+        to=util.CHAIN_SCORE, method='getPRepTerm', height=height
+    ).build())
+    util.dump_json(term)
+
+
+class Term(dict):
+    def __init__(self, d: dict):
+        super().__init__(d)
+        self.__dict__ = self
+
+    @property
+    def height(self) -> int:
+        return as_int(self['blockHeight'])
+    
+    @property
+    def start_height(self) -> int:
+        return as_int(self['startBlockHeight'])
+
+    @property
+    def end_height(self) -> int:
+        return as_int(self['endBlockHeight'])
+
+    @property
+    def sequence(self) -> int:
+        return as_int(self['sequence'])
+
+class PRepDelta:
+    def __init__(self) -> None:
+        pass
+
+def diff_prep_status(prev_status, current_status) -> dict:
+    blocks = as_int(current_status['totalBlocks']) - as_int(prev_status['totalBlocks'])
+    vblocks = as_int(current_status['validatedBlocks']) - as_int(prev_status['validatedBlocks'])
+    fblocks = blocks - vblocks
+
+    prev_jflags = as_int(prev_status['jailFlags'])
+    current_jflags = as_int(current_status['jailFlags'])
+    change_jflags = current_jflags^prev_jflags
+    added_jflags = change_jflags&current_jflags
+    removed_jflags = change_jflags&prev_jflags
+    added_flags = list(map(
+        lambda x: '+'+JailFlag.as_name(x),
+        JailFlag.from_flags(added_jflags),
+    ))
+    removed_flags = list(map(
+        lambda x: '-'+JailFlag.as_name(x),
+        JailFlag.from_flags(removed_jflags),
+    ))
+    prev_panalty = prev_status['penalty']
+    current_penalty = current_status['penalty']
+    if prev_panalty != current_penalty:
+        if current_penalty != '0x0':
+            p = '+'+PENALTY_TO_STR[current_penalty]
+            if p not in added_flags:
+                added_flags.append(p)
+        if prev_panalty != '0x0':
+            p = '-'+PENALTY_TO_STR[prev_panalty]
+            if p not in removed_flags:
+                removed_flags.append(p)
+    return {
+        "totalBlocks": blocks,
+        "validatedBlocks": vblocks,
+        "failureBlocks": fblocks,
+        "flags": added_flags+removed_flags,
+    }
+
+@click.command('scan')
+@click.pass_obj
+@click.argument('key', metavar='[<search key>]', type=click.STRING, required=False)
+@click.option('--height', type=str, default=None)
+@click.option('--terms', '-t', type=int, default=14)
+def scan_prep(obj: dict, key: str, height: str, terms: int):
+    if key is None:
+        key = asset.get_wallet().get_address()
+
+    if height is not None:
+        height = int(height, 0)
+    preps = icon_getPReps(height=height)['preps']
+
+    prep_info = {}
+    for prep in preps:
+        prep_info[prep['nodeAddress']] = prep
+
+    prep_index = None
+
+    try :
+        prep_index = int(key, 0)-1
+    except:
+        pass
+
+    if prep_index is None:
+        prep = search_prep(prep_info, key)
+        prep_addr = None
+        if 'address' in prep:
+            prep_addr = prep['address']
+
+        for idx in range(len(preps)):
+            if preps[idx]['address'] == prep_addr:
+                prep_index = idx
+    else:
+        while prep_index >= len(preps):
+            preps += icon_getPReps(len(preps), height=height)['preps']
+        prep_addr = preps[prep_index]['address']
+
+    if prep_index is None:
+        raise click.ClickException(f'fail to find PRep key={key}')
+
+    svc = service.get_instance()
+    current_term = Term(svc.call(CallBuilder(
+        to=util.CHAIN_SCORE, method='getPRepTerm', height=height
+    ).build()))
+    current_status = icon_getPRep(prep_addr, height=current_term.height)
+
+    p = RowPrinter([
+        Column(lambda t, d: t.sequence, 6, '{:>6}', "Term#"),
+        Column(lambda t, d: t.start_height, 9, '{:>9}', "Start"),
+        Column(lambda t, d: t.end_height, 9, '{:>9}', "End"),
+        Column(lambda t, d: d['totalBlocks'], 8, '{:>8}', "Blocks"),
+        Column(lambda t, d: d['validatedBlocks'], 8, '{:>8}', "Validated"),
+        Column(lambda t, d: d['failureBlocks'], 8, '{:>8}', "Failed"),
+        Column(lambda t, d: " ".join(d['flags']), 40, '{:<40s}', "Flag Changes"),
+    ])
+
+    term_limit = current_term.sequence-terms
+    p.print_row([(2, "ADDRESS"), (p.columns-2, prep_addr)], reverse=True, underline=True)
+    p.print_header()
+    while current_term.sequence > term_limit:
+        term_start = current_term.start_height
+        term_end = current_term.end_height
+
+        prev_status = icon_getPRep(prep_addr, height=term_start-1)
+
+        delta = diff_prep_status(prev_status, current_status)
+        p.print_data(current_term, delta, underline=True)
+
+        current_status = prev_status
+        current_term = Term(svc.call(CallBuilder(
+            to=util.CHAIN_SCORE, method='getPRepTerm', height=term_start-1
+        ).build()))
