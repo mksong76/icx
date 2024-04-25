@@ -524,7 +524,7 @@ def get_rewards_of(address: str, *, height: int = None, terms: int = 5) -> Itera
         yield {
             'start': rc_start,
             'end': rc_end,
-            'sequence': term_seq-2,
+            'sequence': term_seq,
             'reward': reward,
             'claimed': claimed,
             'claim': claim,
