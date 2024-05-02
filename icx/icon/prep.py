@@ -727,7 +727,7 @@ def scan_prep(obj: dict, key: str, height: str, terms: int):
     ])
 
     term_limit = current_term.sequence-terms
-    p.print_row([(2, "ADDRESS"), (p.columns-2, prep_addr)], reverse=True, underline=True)
+    p.print_row([(2, "ADDRESS", '>'), (p.columns-2, prep_addr, '<')], reverse=True, underline=True)
     p.print_header()
     while current_term.sequence > term_limit:
         term_start = current_term.start_height
