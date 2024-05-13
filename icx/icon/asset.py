@@ -342,16 +342,14 @@ def stake_auto(ctx: dict, preps: List[str] = None, vpower: int = 0, target: int 
     if claimable >= ICX and not noclaim:
         print(f'[!] Claim claimable={claimable/ICX:.3f}', file=sys.stderr)
         service.claim_iscore(wallet)
-        iscore = service.query_iscore(wallet.address)
-        claimable = int(iscore['estimatedICX'], 0)
+        claimable = 0
 
     balance = service.get_balance(wallet.address)
     stakes = service.get_stake(wallet.address)
     delegation = service.get_delegation(wallet.address)
-    voting_power = int(delegation['votingPower'], 0)
+    votingpower = int(delegation['votingPower'], 0)
     staked, unstaking, _ = sum_stake(stakes)
-    bond = service.get_bond(wallet.address)
-    bonded, unbonding, _, _ = sum_bond(bond)
+    votingpower_new = vpower*ICX
 
     if target is None:
         min_balance = balance+unstaking
@@ -368,24 +366,24 @@ def stake_auto(ctx: dict, preps: List[str] = None, vpower: int = 0, target: int 
     if balance+unstaking > max_balance:
         print(f'[-] Staking MORE {(balance+unstaking-max_balance)/ICX:+.3f}', file=sys.stderr)
         service.stake_all(wallet, max_balance, stakes)
-        service.delegate_all(preps, wallet, vpower*ICX)
+        service.delegate_all(preps, wallet, votingpower_new)
     elif balance+unstaking < min_balance:
         print(f'[-] Staking LESS {(balance+unstaking-max_balance)/ICX:+.3f}', file=sys.stderr)
-        if balance+unstaking+voting_power < min_balance:
-            voting_power = max_balance-unstaking-balance
-            service.delegate_all(preps, wallet, voting_power+vpower*ICX)
+        if balance+unstaking+votingpower < min_balance+votingpower_new:
+            votingpower = max_balance-unstaking-balance+votingpower_new
+            service.delegate_all(preps, wallet, votingpower)
         target_balance = service.get_balance(wallet.address)
-        target_balance += voting_power+unstaking
+        target_balance += votingpower+unstaking
         service.stake_all(wallet, target_balance, stakes)
     else:
-        service.delegate_all(preps, wallet, 0)
+        service.delegate_all(preps, wallet, votingpower_new)
 
     delegation = service.get_delegation(wallet.address)
     stakes = service.get_stake(wallet.address)
     balance = service.get_balance(wallet.address)
     staked, unstaking, remaining_blocks = sum_stake(stakes)
 
-    asset = claimable + balance + staked + unstaking + bonded + unbonding
+    asset = claimable + balance + staked + unstaking
     remains = timedelta(seconds=remaining_blocks*2)
 
     sym, price = get_price()
