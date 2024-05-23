@@ -143,5 +143,5 @@ def get_seeds(obj: dict = None):
     if obj is None:
         obj = click.get_current_context().obj
     if CONTEXT_NODE_SEED in obj:
-        return obj[CONFIG_NODE_SEEDS]
+        return obj[CONTEXT_NODE_SEED]
     return None
