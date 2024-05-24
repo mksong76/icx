@@ -318,7 +318,7 @@ def get_prep(obj: dict, key: str, raw: bool, bonders: bool, height: str):
         ]
 
         has_public_key = as_bool(prep_info.get('hasPublicKey'))
-        public_key_status = 'N/A' if has_public_key is None else 'OK' if has_public_key else 'NOT OK'
+        public_key_status = 'N/A' if has_public_key is None else 'OK' if has_public_key else 'NG'
         rows +=[
             Header('Status', 6),
             Row(lambda obj: PENALTY_TO_STR[obj.get('penalty')], 20, '{}', 'Penalty'),
@@ -515,7 +515,8 @@ def register_pubkey(obj: dict, pubkey: list[str]):
             click.secho(f'FAIL {k} ({addr}) for {prep_addr}', fg='bright_red')
 
 def as_bool(v: Optional[str]) -> str:
-    return "None" if v is None else "Yes" if int(v, 0) else "No"
+    return None if v is None else True if int(v,0) else False
+
 def as_int(v: Optional[str], d: Optional[int] = None) -> Optional[int]:
     return d if v is None else int(v, 0)
 
@@ -733,7 +734,10 @@ def scan_prep(obj: dict, key: str, height: str, terms: int):
         term_start = current_term.start_height
         term_end = current_term.end_height
 
-        prev_status = icon_getPRep(prep_addr, height=term_start-1)
+        try:
+            prev_status = icon_getPRep(prep_addr, height=term_start-1)
+        except:
+            break
 
         delta = diff_prep_status(prev_status, current_status)
         p.print_data(current_term, delta, underline=True)
