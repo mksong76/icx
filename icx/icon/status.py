@@ -27,12 +27,11 @@ PENALTY_REASON_TO_CHECK = {
 }
 
 def candidate_reason_of_prep(prep: dict) -> Optional[str]:
+    if prep.get('hasPublicKey') == '0x0':
+        return 'NoPk'
     penalty = prep.get('penalty')
     if  penalty is None or penalty == '0x0':
         return None
-    if 'hasPublicKey' in prep:
-        if prep['hasPublicKey'] == '0x0':
-            return "NoPk"
     jail_flags = as_int(prep.get('jailFlags'))
     if jail_flags is None or jail_flags == 0:
         return PENALTY_TO_STR[penalty]
@@ -203,10 +202,11 @@ def show_status(obj: dict, version: str, timeout: float):
 
         args = (idx+1, item.prep['name'][:18], item.prep['type'], item.prep['ip'], format_decimals(item.prep['power']//10**3,0)+'k')
         has_power = item.prep['power'] > 0
+        has_ip = item.prep['ip'] == NO_IP
         if item.prep['type'] == 'Main':
             format = MAIN_FORMAT
             main_nodes += 1
-        elif item.prep['type'] == 'Cand' and has_power and idx < total_preps:
+        elif item.prep['type'] != 'Sub' and has_power and idx < total_preps:
             format = CAND_FORMAT
         else:
             if has_power:
