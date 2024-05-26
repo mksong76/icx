@@ -600,6 +600,9 @@ def list_preps(height: int = None, raw: bool = False, all: bool = False, addr: b
 @click.pass_obj
 @click.option('--height', type=str, default=None)
 def show_term(obj: dict, height: str):
+    """
+    Show term information
+    """
     if height is not None:
         height = int(height, 0)
     svc = service.get_instance()
