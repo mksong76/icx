@@ -98,11 +98,10 @@ def parse_output(outputs: list, output: any) -> any:
 @click.argument('expr')
 @click.argument('param', nargs=-1)
 @click.option('--value', type=DecimalType('icx', 18), default=0, help='Value to transfer')
-@click.option("--keystore")
 @click.option('--step_limit', '-s', type=INT, help="Step limit")
 @click.option('--height', '-h', type=INT, default=None, help="Block height for query")
 @click.option('--raw', '-r', is_flag=True)
-def call(expr: str, param: List[str], value: int = 0, keystore: str = None, raw: bool = False, step_limit: int = None, height: int = None):
+def call(expr: str, param: List[str], value: int = 0, raw: bool = False, step_limit: int = None, height: int = None):
     '''
     Call method of the contract
     '''
@@ -163,7 +162,7 @@ def call(expr: str, param: List[str], value: int = 0, keystore: str = None, raw:
         else:
             print(parse_output(info['outputs'], value))
     elif info['type'] == 'function':
-        w = wallet.get_instance(keystore)
+        w = wallet.get_instance()
         params = make_params(info['inputs'], param)
         tx = CallTransactionBuilder(from_=w.address, to=addr, method=method, params=params, value=value, nid=svc.nid).build()
         if step_limit != None:
