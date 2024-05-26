@@ -670,12 +670,15 @@ def diff_prep_status(prev_status, current_status) -> dict:
         "flags": added_flags+removed_flags,
     }
 
-@click.command('scan')
+@click.command('votes')
 @click.pass_obj
 @click.argument('key', metavar='[<search key>]', type=click.STRING, required=False)
 @click.option('--height', type=str, default=None)
 @click.option('--terms', '-t', type=int, default=14)
-def scan_prep(obj: dict, key: str, height: str, terms: int):
+def show_votes(obj: dict, key: str, height: str, terms: int):
+    """
+    Show production and penalty in terms of the PRep
+    """
     if key is None:
         key = asset.get_wallet().get_address()
 
