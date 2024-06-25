@@ -2,6 +2,8 @@
 
 import base64
 import io
+import sys
+from datetime import datetime
 from typing import List
 
 import click
@@ -271,3 +273,57 @@ def transfer(to: str, amount: str):
     '''
     ks = wallet.get_instance()
     do_transfer(ks, to, amount)
+
+ScaleSearchHeight = 1000_000
+
+@click.command('block-near', help='Get block near timestamp')
+@click.argument('target_ts', metavar='<timestamp>', type=str)
+def block_near(target_ts: str):
+    try:
+        dt = util.datetime_from_ts(target_ts)
+    except:
+        dt = datetime.fromisoformat(target_ts)
+
+    dt = dt.astimezone()
+    target_ts = int(dt.astimezone(util.UTC).timestamp()*1000000)
+
+    print(f'DateTime={util.format_dt(dt)} TimeStamp={target_ts}', file=sys.stderr)
+
+    svc = service.get_instance()
+
+    lblk = svc.get_block(2)
+    rblk = svc.get_block('latest')
+    cnt = 0
+    if target_ts < lblk['time_stamp'] or target_ts > rblk['time_stamp']:
+        raise click.BadParameter(f'No block found at timestamp {target_ts}')
+    while True:
+        lblk_height = lblk['height']
+        rblk_height = rblk['height']
+        if rblk_height < lblk_height+ScaleSearchHeight:
+            lblk_ts = lblk['time_stamp']
+            rblk_ts = rblk['time_stamp']
+            height = (target_ts - lblk_ts) * (rblk_height - lblk_height) // (rblk_ts - lblk_ts) + lblk_height
+        else:
+            height = (rblk_height + lblk_height)//2
+
+        if height == lblk_height:
+            util.dump_json(lblk)
+            return
+        elif height == rblk_height:
+            util.dump_json(rblk)
+            return
+
+        blk = svc.get_block(height)
+        cnt += 1
+        print(f'[{cnt}] BH-{blk["height"]} TS={blk["time_stamp"]} {lblk_height} {rblk_height}', file=sys.stderr)
+        blk_ts = blk['time_stamp']
+        if target_ts < blk_ts:
+            rblk = blk
+        elif target_ts > blk_ts:
+            lblk = blk
+        else:
+            util.dump_json(blk)
+            return
+        if rblk['height'] == lblk['height']:
+            util.dump_json(blk)
+            return
