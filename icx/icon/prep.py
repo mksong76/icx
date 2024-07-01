@@ -134,6 +134,12 @@ def icon_getPReps(server: str = None, start: int = None, height: int = None) -> 
     call = CallBuilder(to=util.CHAIN_SCORE, method='getPReps', params=params, height=height).build()
     return svc.call(call)
 
+def icon_getNetworkInfo(server: str = None, height: int = None) -> any:
+    svc = get_service_with_rpc(server)
+    call = CallBuilder(to=util.CHAIN_SCORE, method='getNetworkInfo', params={}, height=height).build()
+    return svc.call(call)
+
+
 def node_inspect(server: str) -> any:
     return util.rest_get(f'http://{server}/admin/chain/icon_dex?informal=true')
 
@@ -144,13 +150,23 @@ def node_get_version(server: str, timeout: float = 1.0) -> any:
     si = util.rest_get(f'http://{server}/admin/system', timeout=timeout)
     return si['buildVersion']
 
+# bond_requirement_of returns bond requirement information
+# - 1 for 0.01%, 5000 for 5%
+BR_BASE = 10_000
+BR_DEFAULT = 500
+def bond_requirement_of(info: dict) -> int:
+    return int(info['bondRequirementRate'], 0) if 'bondRequirementRate' in info \
+        else int(info['bondRequirement'], 0)*100
+
 class PRep(dict):
     TMain = 'Main'
     TSub = 'Sub'
     TCand = 'Cand'
 
-    def __new__(cls, *args: Any, **kwargs: Any) -> 'PRep':
-        return super().__new__(cls, *args, **kwargs)
+    def __new__(cls, *args: Any, br: int=BR_DEFAULT, **kwargs: Any) -> 'PRep':
+        o = super().__new__(cls, *args, **kwargs)
+        o.__br = br
+        return o
 
     def get_int(self, key: any) -> int:
         return int(self.get(key, '0'), 0)
@@ -168,11 +184,16 @@ class PRep(dict):
         return self.get_int('bonded')
     
     @property
+    def votable(self) -> int:
+        return self.bonded*BR_BASE//self.__br if self.__br != 0 \
+            else self.bonded+self.delegated
+
+    @property
     def bond_rate(self) -> float:
         voted = self.bonded+self.delegated
         if voted == 0:
             return 0.0
-        return self.bonded*20/voted
+        return self.votable/voted
     
     @property
     def voter_rate(self) -> float:
@@ -182,7 +203,7 @@ class PRep(dict):
     def get_voter_rate(self, delegation: int) -> float:
         voterRate = self.COMMISSION_BASE-self.commission_rate
         voted = self.bonded+self.delegated+delegation
-        power = min(self.bonded*20, voted)
+        power = min(self.votable, voted)
         return power*voterRate/voted/self.COMMISSION_BASE
 
     @property
@@ -203,7 +224,8 @@ class PRep(dict):
     
     @property
     def delegation_required(self) -> int:
-        return (self.bonded*19)-self.delegated
+        return self.votable - self.delegated - self.bonded \
+            if self.__br != 0 else 0
 
 def load_prep_store(file: str):
     with open(file, "r") as fd:
@@ -256,6 +278,8 @@ def get_prep(obj: dict, key: str, raw: bool, bonders: bool, height: str):
     if height is not None:
         height = int(height, 0)
     preps = icon_getPReps(rpc, height=height)['preps']
+    netinfo = icon_getNetworkInfo(rpc, height=height)
+    bond_req = bond_requirement_of(netinfo)
 
     if prep_info is None:
         prep_info = {}
@@ -383,7 +407,7 @@ def get_prep(obj: dict, key: str, raw: bool, bonders: bool, height: str):
             idx += 1
 
         rows.append(Header('END', 3))
-        MapPrinter(rows).print_data(PRep(prep_info))
+        MapPrinter(rows).print_data(PRep(prep_info, br=bond_req))
 
 @click.command("inspect")
 @click.pass_obj
@@ -546,7 +570,9 @@ def list_preps(height: int = None, raw: bool = False, all: bool = False, addr: b
     if raw:
         util.dump_json(res)
         return
-    preps: list[PRep] = list(map(lambda x: PRep(x), res['preps']))
+    network_info = icon_getNetworkInfo(height=height)
+    bond_req = bond_requirement_of(network_info)
+    preps: list[PRep] = list(map(lambda x: PRep(x,br=bond_req), res['preps']))
     columns = PREP_COLUMNS
     if addr:
         columns = columns[:]
