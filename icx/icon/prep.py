@@ -598,13 +598,11 @@ def list_preps(height: int = None, raw: bool = False, all: bool = False, addr: b
 
 @click.command('term')
 @click.pass_obj
-@click.option('--height', type=str, default=None)
-def show_term(obj: dict, height: str):
+@click.option('--height', type=util.INT, default=None)
+def show_term(obj: dict, height: int):
     """
     Show term information
     """
-    if height is not None:
-        height = int(height, 0)
     svc = service.get_instance()
     term = svc.call(CallBuilder(
         to=util.CHAIN_SCORE, method='getPRepTerm', height=height
