@@ -354,7 +354,7 @@ def stake_auto(ctx: dict, preps: List[str] = None, vpower: int = 0, target: int 
     if target is None:
         min_balance = balance+unstaking
     elif target >= 0:
-        min_balance = balance+staked+unstaking-(target+1)*ICX
+        min_balance = balance+staked+unstaking-target*ICX
     else:
         min_balance = -target*ICX
     if min_balance < ICX:
