@@ -435,6 +435,12 @@ def get_wallet() -> Wallet:
         obj[CONTEXT_ASSET] = wallet.get_instance(key_store)
     return obj[CONTEXT_ASSET]
 
+def get_wallet_addr() -> Optional[str]:
+    try:
+        return get_wallet().get_address()
+    except:
+        return None
+
 @click.command('price')
 @click.argument('amount', type=DecimalType('icx', 18))
 @click.option('--market', type=str)

@@ -566,6 +566,8 @@ def list_preps(height: int = None, raw: bool = False, all: bool = False, addr: b
     '''
     List PReps
     '''
+    my_addr = asset.get_wallet_addr()
+
     res = icon_getPReps(None, height=height)
     if raw:
         util.dump_json(res)
@@ -604,13 +606,16 @@ def list_preps(height: int = None, raw: bool = False, all: bool = False, addr: b
         kwargs = {}
         if grade == PRep.TCand:
             kwargs['fg'] = 'bright_red'
-            kwargs['bold'] = True
             cand_count += 1
         elif grade == PRep.TMain:
             kwargs['fg'] = 'bright_blue'
             main_count += 1
         else:
             sub_count += 1
+        if prep.get('address') == my_addr:
+            kwargs['bold'] = True
+            kwargs['bg'] = 'magenta'
+            kwargs['underline'] = True
 
         if grade == PRep.TCand and prep.power == 0 and not all:
             continue
@@ -751,9 +756,9 @@ def show_votes(obj: dict, key: str, height: str, terms: int):
         Column(lambda t, d: t.sequence, 6, '{:>6}', "Term#"),
         Column(lambda t, d: t.start_height, 9, '{:>9}', "Start"),
         Column(lambda t, d: t.end_height, 9, '{:>9}', "End"),
-        Column(lambda t, d: d['totalBlocks'], 8, '{:>8}', "Blocks"),
-        Column(lambda t, d: d['validatedBlocks'], 8, '{:>8}', "Validated"),
-        Column(lambda t, d: d['failureBlocks'], 8, '{:>8}', "Failed"),
+        Column(lambda t, d: d['totalBlocks'], 5, '{:>5}', "Total"),
+        Column(lambda t, d: d['validatedBlocks'], 5, '{:>5}', "Voted"),
+        Column(lambda t, d: d['failureBlocks'], 5, '{:>5}', "Fails"),
         Column(lambda t, d: " ".join(d['flags']), 40, '{:<40s}', "Flag Changes"),
     ])
 
