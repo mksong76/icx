@@ -556,8 +556,8 @@ def show_rewards_of(address: str, *, height: int = None, terms: int = 7):
         Column(lambda e: e['start'], 10, '{:>10}', "Start"),
         Column(lambda e: e['end'], 10, '{:>10}', "End"),
         Column(lambda e: str(e['timestamp']), 19, '{:<19}', "Start Time"),
-        Column(lambda e: format_decimals(e['reward'],3), 20, '{:>16} ICX', "Reward"),
-        Column(lambda e: claim_field(e), 20, '{:>}', "Claimed"),
+        Column(lambda e: format_decimals(e['reward'],3), 18, '{:>14} ICX', "Reward"),
+        Column(lambda e: claim_field(e), 18, '{:>}', "Claimed"),
     ]
 
     rewards = list(get_rewards_of(address, height=height, terms=terms))
