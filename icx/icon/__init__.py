@@ -26,6 +26,7 @@ assets.add_command(asset.stake_auto)
 assets.add_command(asset.show_delegation)
 assets.add_command(asset.show_price)
 assets.add_command(asset.show_reward)
+assets.add_command(asset.claim_cmd)
 
 @click.group('prep', help="ICON PRep related operations")
 @click.option('--store', type=click.STRING, default=None, envvar='ICX_PREP_STORE', help='File to store PRep information')

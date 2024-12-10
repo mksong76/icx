@@ -5,6 +5,7 @@ import locale
 import os
 import sys
 from datetime import datetime, timedelta
+import time
 from typing import Iterable, List, Optional, Tuple, Union
 
 import click
@@ -42,7 +43,7 @@ class AssetService:
 
     def claim_iscore(self, wallet: Wallet) -> dict:
         tx = CallTransactionBuilder(
-            nid=1,
+            nid=self.service.nid,
             from_=wallet.get_address(),
             to=CHAIN_SCORE,
             method='claimIScore'
@@ -75,8 +76,8 @@ class AssetService:
 
     def stake_all(self, wallet: Wallet, remain: int = ICX, stake: dict = None ):
         balance = self.get_balance(wallet.get_address())
-
-        staked = int(stake['stake'], 0)
+        if stake is None:
+            stake = self.get_stake(wallet.get_address())
         unstaking = 0
         for unstake in stake['unstakes']:
             unstaking += int(unstake['unstake'], 0)
@@ -84,7 +85,12 @@ class AssetService:
         change = (balance+unstaking)-remain
         if change == 0:
             return
+        self.stake_adjust(wallet, change, stake)
 
+    def stake_adjust(self, wallet: Wallet, change: int, stake: dict = None ):
+        if stake is None:
+            stake = self.get_stake(wallet.get_address())
+        staked = int(stake['stake'], 0)
         target = staked + change
         if target < 0:
             if  staked == 0:
@@ -95,7 +101,7 @@ class AssetService:
         print(f'[!] Stake ADJUST {change/ICX:+.3f} to={target/ICX:.3f}', file=sys.stderr)
 
         tx = CallTransactionBuilder(
-            nid=1,
+            nid=self.service.nid,
             from_=wallet.get_address(),
             to=CHAIN_SCORE,
             method='setStake',
@@ -117,6 +123,11 @@ class AssetService:
         if delegation is None:
             delegation = self.get_delegation(wallet.get_address())
 
+        voting_power = int(delegation['votingPower'], 0)
+        change =  voting_power - target
+        self.delegate_adjust(preps, wallet, change, delegation)
+
+    def delegate_adjust(self, preps: List[str], wallet: Wallet, change: int, delegation: dict = None):
         spreps = []
         for entry in delegation['delegations']:
             spreps.append(entry['address'])
@@ -124,8 +135,6 @@ class AssetService:
             preps = spreps
         prep_count = len(preps)
 
-        voting_power = int(delegation['votingPower'], 0)
-        change =  voting_power - target
         if change == 0 and set(preps) == set(spreps):
             return
 
@@ -148,7 +157,7 @@ class AssetService:
                 })
 
         tx = CallTransactionBuilder(
-            nid=1,
+            nid=self.service.nid,
             to=CHAIN_SCORE,
             method='setDelegation',
             params={ "delegations": new_delegations },
@@ -164,6 +173,47 @@ class AssetService:
                 "address": address,
             }
         ).build())
+
+    def bond_adjust(self, preps: List[str], wallet: Wallet, change: int, bonds: dict):
+        if bonds is None:
+            bonds = self.get_bond(wallet.get_address())
+
+        bond_map = {}
+        for entry in bonds['bonds']:
+            bond_map[entry['address']] = int(entry['value'], 0)
+        if preps is None or len(preps) == 0:
+            preps = list(bond_map.keys())
+
+        prep_count = len(preps)
+        if prep_count == 0:
+            raise Exception('No PReps to bond')
+
+        sign = 1 if change > 0 else -1
+        remain = change*sign
+        base_change = (remain+prep_count-1) // prep_count
+        for prep in preps:
+            value = min(base_change, remain)
+            remain -= value
+            new_value = bond_map.get(prep, 0) + sign*value
+            if new_value < 0:
+                raise Exception('Negative bond')
+            bond_map[prep] = new_value
+
+        new_bonds = []
+        for prep, value in bond_map.items():
+            new_bonds.append({
+                'address': prep,
+                'value': f'{value:#x}',
+            })
+
+        tx = CallTransactionBuilder(
+            nid=self.service.nid, 
+            from_=wallet.get_address(),
+            to=CHAIN_SCORE,
+            method='setBond',
+            params={ 'bonds': new_bonds },
+        ).build()
+        self.service.estimate_and_send_tx(tx, wallet)
 
 def sum_stake(stake: dict) -> Tuple[int, int, int]:
     staked = int(stake['stake'], 0)
@@ -606,3 +656,58 @@ def show_reward(obj: dict, address: list[str], height: int = None, terms: int = 
         address = [ wallet.get_address() ]
     for item in address:
         show_rewards_of(item, height=height, terms=terms)
+
+@click.command('claim')
+@click.argument('action', type=click.Choice(['hold', 'transfer', 'delegate', 'bond']), default='hold')
+@click.option('--all', '-a', is_flag=True, default=False)
+@click.option('--dest', '-d', type=wallet.ADDRESS, default=None)
+@click.option('--period', '-p', type=util.PERIOD, default=0)
+@click.pass_obj
+def claim_cmd(ctx: dict, all: bool, action:str, dest: str, period: timedelta):
+    service = AssetService()
+    wallet: Wallet = get_wallet()
+
+    start = datetime.now()
+    while True:
+        do_claim(service, wallet, all, action, dest)
+        if period == 0:
+            break
+        end = datetime.now()
+        start += period
+        delay = start-end
+        click.echo(f'[#] Sleep for {delay.total_seconds():.3f} seconds', file=sys.stderr)
+        time.sleep(delay.total_seconds())
+
+
+def do_claim(service: AssetService, wallet: Wallet, all: bool, action: str, dest: str):
+    iscore = service.query_iscore(wallet.address)
+    claimable = int(iscore['estimatedICX'], 0)
+
+    if claimable == 0:
+        click.echo('[!] Nothing to claim', file=sys.stderr)
+        return
+    if claimable < ICX and not all:
+        click.echo(f"[!] Too small to claim claimable={claimable/ICX:.3f}")
+        return
+
+    click.echo(f'[#] Claiming... claimable={claimable/ICX:.3f}', file=sys.stderr)
+    service.claim_iscore(wallet)
+
+    if claimable < ICX:
+        click.echo(f'[#] Too small claimable={claimable/ICX:.3f} to do {action}')
+        return
+
+    amount = claimable - (claimable%ICX)
+
+    if action == 'transfer':
+        if (dest is None):
+            raise click.UsageError('Please specify destination address')
+        basic.do_transfer(wallet, dest, str(amount))
+    elif action in ['delegate', 'bond']:
+        service.stake_all(wallet, amount)
+        if action == 'delegate':
+            service.delegate_adjust([], wallet, amount)
+        else:
+            service.bond_adjust([], wallet, amount)
+    else:
+        raise click.UsageError(f'Unknown action: {action}')

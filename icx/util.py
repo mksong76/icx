@@ -195,3 +195,34 @@ class HashType(click.ParamType):
         return ensure_hash(value)
 
 HASH = HashType()
+
+def period_to_timedelta(value: str) -> timedelta:
+    if value is None:
+        return timedelta(0)
+    if value.endswith('s'):
+        return timedelta(seconds=int(value[:-1]))
+    elif value.endswith('m'):
+        return timedelta(minutes=int(value[:-1]))
+    elif value.endswith('h'):
+        return timedelta(hours=int(value[:-1]))
+    elif value.endswith('d'):
+        return timedelta(days=int(value[:-1]))
+    elif value.endswith('w'):
+        return timedelta(weeks=int(value[:-1]))
+    else:
+        return timedelta(seconds=int(value))
+
+class PeriodType(click.ParamType):
+    name = "period"
+    def convert(self, value, param, ctx) -> timedelta:
+        # if value is None:
+        #     return None
+        # return period_to_timedelta(value)
+        if isinstance(value, timedelta):
+            return value
+        try:
+            return period_to_timedelta(str(value).lower())
+        except ValueError:
+            self.fail(f'{value} is not a valid period', param, ctx)
+
+PERIOD = PeriodType()
