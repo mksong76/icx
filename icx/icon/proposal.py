@@ -263,9 +263,8 @@ def print_proposal(proposal: Proposal,  *, last_height: int = None):
 
 @main.command("get")
 @click.option("--raw", is_flag=True)
-@click.option("--name", is_flag=True)
 @click.argument("id", metavar='<id>')
-def show_proposal(id: str, *, raw=False, name=False):
+def show_proposal(id: str, *, raw=False):
     '''
     Show the proposal of <id>
     '''
