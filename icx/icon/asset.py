@@ -20,7 +20,7 @@ from ..market import upbit
 from ..util import (CHAIN_SCORE, ICX, DecimalType, dump_json,
                     ensure_address, format_decimals)
 from ..wallet import wallet
-from .prep import PRep
+from .prep import PRep, icon_getNetworkInfo
 
 CONFIG_STAKE_TARGETS = "target_balances"
 CONFIG_SUPPORTING_PREPS = "supporting_preps"
@@ -659,27 +659,46 @@ def show_reward(obj: dict, address: list[str], height: int = None, terms: int = 
 
 @click.command('claim')
 @click.argument('action', type=click.Choice(['hold', 'transfer', 'delegate', 'bond']), default='hold')
-@click.option('--all', '-a', is_flag=True, default=False)
-@click.option('--dest', '-d', type=wallet.ADDRESS, default=None)
-@click.option('--period', '-p', type=util.PERIOD, default=0)
-@click.pass_obj
-def claim_cmd(ctx: dict, all: bool, action:str, dest: str, period: timedelta):
+@click.option('--all', '-a', is_flag=True, default=False,
+              help='Claim all rewards even if it\'s too small')
+@click.option('--dest', '-d', type=wallet.ADDRESS, default=None,
+              metavar='<address>', help='Destination address for the operation')
+@click.option('--period', '-p', type=util.INT, default=0,
+              metavar='<period>', help='Number of terms to wait for the next claim')
+def claim_cmd(all: bool, action:str, dest: str, period: timedelta):
     service = AssetService()
     wallet: Wallet = get_wallet()
+    svc = service.service
 
-    start = datetime.now()
     while True:
         do_claim(service, wallet, all, action, dest)
         if period == 0:
             break
-        end = datetime.now()
-        start += period
-        delay = start-end
-        click.echo(f'[#] Sleep for {delay.total_seconds():.3f} seconds', file=sys.stderr)
-        time.sleep(delay.total_seconds())
+
+        term_info = svc.call(CallBuilder(
+            to=CHAIN_SCORE, method='getPRepTerm'
+        ).build())
+        block_height = int(term_info['blockHeight'], 0)
+
+        query_result = svc.call(CallBuilder(
+            to=CHAIN_SCORE,
+            method='queryIScore',
+            params = {
+                "address": wallet.get_address()
+            },
+            height=block_height
+        ).build())
+        iscore = int(query_result['estimatedICX'], 0)
+        if iscore >= ICX:
+            continue
+
+        delay = (int(term_info['endBlockHeight'], 0) - block_height + 1)*2
+        click.echo(f'[#] Sleep for {delay} seconds', file=sys.stderr)
+        time.sleep(delay)
 
 
 def do_claim(service: AssetService, wallet: Wallet, all: bool, action: str, dest: str):
+    click.echo(f'[#] Checking claimable...', file=sys.stderr)
     iscore = service.query_iscore(wallet.address)
     claimable = int(iscore['estimatedICX'], 0)
 
@@ -687,14 +706,14 @@ def do_claim(service: AssetService, wallet: Wallet, all: bool, action: str, dest
         click.echo('[!] Nothing to claim', file=sys.stderr)
         return
     if claimable < ICX and not all:
-        click.echo(f"[!] Too small to claim claimable={claimable/ICX:.3f}")
+        click.echo(f"[!] Too small to claim claimable={claimable/ICX:.3f}", file=sys.stderr)
         return
 
     click.echo(f'[#] Claiming... claimable={claimable/ICX:.3f}', file=sys.stderr)
     service.claim_iscore(wallet)
 
     if claimable < ICX:
-        click.echo(f'[#] Too small claimable={claimable/ICX:.3f} to do {action}')
+        click.echo(f'[#] Too small claimable={claimable/ICX:.3f} to do {action}', file=sys.stderr)
         return
 
     amount = claimable - (claimable%ICX)
