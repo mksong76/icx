@@ -32,13 +32,14 @@ class AssetService:
             svc = service.get_instance(svc)
         self.service = svc
 
-    def query_iscore(self, address: str) -> dict:
+    def query_iscore(self, address: str, height: int = None) -> dict:
         return self.service.call(CallBuilder(
             to=CHAIN_SCORE,
             method='queryIScore',
             params = {
                 "address": address
-            }
+            },
+            height=height,
         ).build())
 
     def claim_iscore(self, wallet: Wallet) -> dict:
@@ -49,6 +50,13 @@ class AssetService:
             method='claimIScore'
         ).build()
         return self.service.estimate_and_send_tx(tx, wallet)
+
+    def get_prep_term(self, height: int = None) -> dict:
+        return self.service.call(CallBuilder(
+            to=CHAIN_SCORE,
+            method='getPRepTerm',
+            height=height
+        ).build())
 
     def get_last_height(self) -> int:
         try:
@@ -670,31 +678,30 @@ def claim_cmd(all: bool, action:str, dest: str, period: timedelta):
     wallet: Wallet = get_wallet()
     svc = service.service
 
+    target_height = None
     while True:
         do_claim(service, wallet, all, action, dest)
         if period == 0:
             break
 
-        term_info = svc.call(CallBuilder(
-            to=CHAIN_SCORE, method='getPRepTerm'
-        ).build())
-        block_height = int(term_info['blockHeight'], 0)
+        while True:
+            prep_term = service.get_prep_term()
+            block_height = int(prep_term['blockHeight'], 0)
+            click.echo(f'[#] Current block_height={block_height}', file=sys.stderr)
 
-        query_result = svc.call(CallBuilder(
-            to=CHAIN_SCORE,
-            method='queryIScore',
-            params = {
-                "address": wallet.get_address()
-            },
-            height=block_height
-        ).build())
-        iscore = int(query_result['estimatedICX'], 0)
-        if iscore >= ICX:
-            continue
+            if target_height is None or block_height >= target_height:
+                iscore_result = service.query_iscore(wallet.address)
+                iscore = int(iscore_result['estimatedICX'], 0)
+                if iscore >= ICX:
+                    break
 
-        delay = (int(term_info['endBlockHeight'], 0) - block_height + 1)*2
-        click.echo(f'[#] Sleep for {delay} seconds', file=sys.stderr)
-        time.sleep(delay)
+                # Sleep until it reaches the next block of the start of the next term
+                # to get the reward information.
+                target_height = int(prep_term['endBlockHeight'], 0) + 2
+
+            delay = (target_height - block_height)*2
+            click.echo(f'[#] Sleep for {delay} seconds for target_height={target_height}', file=sys.stderr)
+            time.sleep(delay)
 
 
 def do_claim(service: AssetService, wallet: Wallet, all: bool, action: str, dest: str):
