@@ -4,7 +4,7 @@ import json
 import locale
 import os
 import sys
-from datetime import datetime, timedelta
+from datetime import timedelta
 import time
 from typing import Iterable, List, Optional, Tuple, Union
 
@@ -17,10 +17,9 @@ from .. import basic, service, util
 from ..config import CONTEXT_CONFIG, Config
 from ..cui import Column, RowPrinter
 from ..market import upbit
-from ..util import (CHAIN_SCORE, ICX, DecimalType, dump_json,
-                    ensure_address, format_decimals)
+from ..util import (CHAIN_SCORE, ICX, DecimalType, ensure_address, format_decimals)
 from ..wallet import wallet
-from .prep import PRep, icon_getNetworkInfo
+from .prep import PRep
 
 CONFIG_STAKE_TARGETS = "target_balances"
 CONFIG_SUPPORTING_PREPS = "supporting_preps"
@@ -483,7 +482,7 @@ def show_delegation(ctx: dict):
         prep = PRep(prep_map[entry['address']])
         p.print_data(entry, prep, underline=True)
 
-def get_wallet() -> Wallet:
+def get_wallet() -> wallet.MyWallet:
     ctx = click.get_current_context()
     obj = ctx.obj
     if CONTEXT_ASSET not in obj:
@@ -665,6 +664,8 @@ def show_reward(obj: dict, address: list[str], height: int = None, terms: int = 
     for item in address:
         show_rewards_of(item, height=height, terms=terms)
 
+BlockInterval = 2
+
 @click.command('claim')
 @click.argument('action', type=click.Choice(['hold', 'transfer', 'delegate', 'bond']), default='hold')
 @click.option('--all', '-a', is_flag=True, default=False,
@@ -675,33 +676,36 @@ def show_reward(obj: dict, address: list[str], height: int = None, terms: int = 
               metavar='<period>', help='Number of terms to wait for the next claim')
 def claim_cmd(all: bool, action:str, dest: str, period: timedelta):
     service = AssetService()
-    wallet: Wallet = get_wallet()
-    svc = service.service
+    wallet = get_wallet()
 
-    target_height = None
+    next_term_seq = None
     while True:
-        do_claim(service, wallet, all, action, dest)
-        if period == 0:
-            break
+        prep_term = service.get_prep_term()
+        block_height = int(prep_term['blockHeight'], 0)
+        term_start = int(prep_term['startBlockHeight'], 0)
+        term_end = int(prep_term['endBlockHeight'], 0)
+        term_seq = int(prep_term['sequence'], 0)
 
-        while True:
-            prep_term = service.get_prep_term()
-            block_height = int(prep_term['blockHeight'], 0)
-            click.echo(f'[#] Current block_height={block_height}', file=sys.stderr)
+        click.echo(f'[#] Current block_height={block_height}', file=sys.stderr)
 
-            if target_height is None or block_height >= target_height:
-                iscore_result = service.query_iscore(wallet.address)
-                iscore = int(iscore_result['estimatedICX'], 0)
-                if iscore >= ICX:
+        if next_term_seq is None or term_seq >= next_term_seq:
+            if block_height >= term_start+1:
+                do_claim(service, wallet, all, action, dest)
+                if period <= 0:
                     break
+                next_term_seq = term_seq + period
+        if next_term_seq is None:
+            next_term_seq = term_seq
 
-                # Sleep until it reaches the next block of the start of the next term
-                # to get the reward information.
-                target_height = int(prep_term['endBlockHeight'], 0) + 2
-
-            delay = (target_height - block_height)*2
-            click.echo(f'[#] Sleep for {delay} seconds for target_height={target_height}', file=sys.stderr)
-            time.sleep(delay)
+        if (next_term_seq - term_seq)<=0:
+            time.sleep(BlockInterval)
+        else:
+            target_height = term_end+2
+            target_height += (term_end-term_start+1)*(next_term_seq - term_seq - 1)
+            delay = timedelta(seconds=(target_height - block_height)*BlockInterval)
+            click.echo(f'[#] Sleep for {delay} for target_height={target_height}', file=sys.stderr)
+            wallet.ensure_loaded()
+            time.sleep(delay.total_seconds())
 
 
 def do_claim(service: AssetService, wallet: Wallet, all: bool, action: str, dest: str):

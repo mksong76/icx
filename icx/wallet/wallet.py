@@ -56,6 +56,9 @@ class MyWallet(Wallet):
                 self.__wallet = load_wallet_from_dict(self.src, password)
         return self.__wallet
     
+    def ensure_loaded(self):
+        self.__get_loaded()
+
     def get_address(self) -> str:
         return self.__addr
 
