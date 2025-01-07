@@ -4,7 +4,7 @@ import json
 import locale
 import os
 import sys
-from datetime import timedelta
+from datetime import timedelta, datetime
 import time
 from typing import Iterable, List, Optional, Tuple, Union
 
@@ -703,7 +703,7 @@ def claim_cmd(all: bool, action:str, dest: str, period: timedelta):
             target_height = term_end+2
             target_height += (term_end-term_start+1)*(next_term_seq - term_seq - 1)
             delay = timedelta(seconds=(target_height - block_height)*BlockInterval)
-            click.echo(f'[#] Sleep for {delay} for target_height={target_height}', file=sys.stderr)
+            click.echo(f'[#] Sleep for {delay} for target_height={target_height} ({datetime.now()+delay})', file=sys.stderr)
             wallet.ensure_loaded()
             time.sleep(delay.total_seconds())
 
