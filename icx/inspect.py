@@ -177,13 +177,33 @@ class Problem(tuple):
     def reason(self) -> any:
         return self[1]
 
+class NodeReport:
+    def __init__(self, node: Node, reporter: Node, real: bool = False):
+        self.node = node
+        self.reporters = [reporter]
+        self.is_real = [real]
+
+    def report(self, reporter: Node, real: bool = False):
+        try :
+            idx = self.reporters.index(reporter)
+            self.is_real[idx] = self.is_real[idx] or real
+        except ValueError:
+            self.reporters.append(reporter)
+            self.is_real.append(real)
+
+    def count_real(self) -> int:
+        return sum(self.is_real)
+
+    def count_reports(self) -> int:
+        return len(self.reporters)
+
 class NetworkInformation:
     def __init__(self, cid: str, verbose: bool = False, public_only: bool = False) -> None:
         self.cid = cid
         self.verbose = verbose
         self.public_only = public_only
         self.p2pToNode: Dict[str,Node] = {}
-        self.idToNode: Dict[str,List[Tuple[Node]]] = {}
+        self.idToNode: Dict[str,List[NodeReport]] = {}
         self.inspectingQueue  = []
         self.executor = futures.ThreadPoolExecutor()
 
@@ -200,21 +220,17 @@ class NetworkInformation:
             return
         self.process_inspection(inspection, node)
 
-    def report_address(self, node: Node, addr: str, reporter: Node):
+    def report_address(self, node: Node, addr: str, reporter: Node, real: bool = False):
         if addr not in self.idToNode:
-            nodes = [(node, reporter)]
+            nodes = [NodeReport(node, reporter, real)]
             self.idToNode[addr] = nodes
         else:
             nodes = self.idToNode[addr]
-            for i in range(len(nodes)):
-                nr = nodes[i]
-                if nr[0] is node:
-                    for j in range(1,len(nr)):
-                        if nr[j] is reporter:
-                            return
-                    nodes[i] = nr + (reporter,)
+            for nr in nodes:
+                if nr.node is node:
+                    nr.report(reporter, real)
                     return
-            nodes.append((node, reporter))
+            nodes.append(NodeReport(node, reporter, real))
 
     def request_inspect(self, node):
         ft = self.executor.submit(self.inspect, node, timeout=2.0)
@@ -240,7 +256,7 @@ class NetworkInformation:
     def apply_list(self, l: list, reporter: Node, category: str):
         for item in l:
             node = self.report_p2p(item['addr'], True)
-            self.report_address(node, item['id'], reporter)
+            self.report_address(node, item['id'], reporter, not item['in'])
 
     def process_inspection(self, inspection: Inspection, node: Node = None):
         p2p = inspection['module']['network']['p2p']
@@ -253,7 +269,7 @@ class NetworkInformation:
         elif p2p_self['addr'] != node.get_p2p():
             click.secho(f'Used p2p:{node.get_p2p()} broadcasting p2p:{p2p_self["addr"]}', file=sys.stderr,
                         fg='red', bold=True)
-        self.report_address(node, p2p_self['id'], node)
+        self.report_address(node, p2p_self['id'], node, True)
 
         for category in ['uncles', 'children', 'friends', 'nephews', 'orphanages', 'others']:
             if category not in p2p:
@@ -269,7 +285,7 @@ class NetworkInformation:
             parent = p2p['parent']
             if 'id' in parent:
                 n = self.report_p2p(parent['addr'], True)
-                self.report_address(n, parent['id'], node)
+                self.report_address(n, parent['id'], node, not parent['in'])
 
     def process_all(self):
         while len(self.inspectingQueue) > 0:
@@ -288,7 +304,7 @@ class NetworkInformation:
                 problems[id] = Problem('red', 'multiple p2p')
             else:
                 for nr in nodes:
-                    p2p = nr[0].get_p2p()
+                    p2p = nr.node.get_p2p()
                     if p2p in known_p2ps:
                         problems[p2p] = Problem('yellow', 'same p2p')
                         break
@@ -301,7 +317,7 @@ class NetworkInformation:
         for id, nodes in self.idToNode.items():
             id_problem = problems.get(id, None)
             for nr in nodes:
-                node = nr[0]
+                node = nr.node
                 p2p = node.get_p2p()
                 problem = id_problem or problems.get(p2p)
                 color = problem.color if problem is not None else None
@@ -310,7 +326,12 @@ class NetworkInformation:
                 else:
                     status = click.style(f'{problem[1]} ', fg=problem[0]) \
                         if problem is not None else ''
-                    status += click.style(f'{len(nr[1:])} reports', fg='bright_white')
+                    count_reports = nr.count_reports()
+                    count_real = nr.count_real()
+                    if count_real > 0:
+                        status += click.style(f'{count_real}/{count_reports} reports', fg='bright_green')
+                    else:
+                        status += click.style(f'{count_reports} reports', fg='bright_white')
                 click.secho(f'{id:<42s} : {p2p:<24s} : {status}', fg=color)
                 id = ''
 
