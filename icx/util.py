@@ -226,3 +226,10 @@ class PeriodType(click.ParamType):
             self.fail(f'{value} is not a valid period', param, ctx)
 
 PERIOD = PeriodType()
+
+def fee_of(*args: any) -> int:
+    fee = 0
+    for arg in args:
+        if isinstance(arg, dict):
+            fee += arg["stepUsed"] * arg["stepPrice"]
+    return fee

@@ -4,7 +4,7 @@ import base64
 import io
 import sys
 from datetime import datetime
-from typing import List
+from typing import List, Union
 
 import click
 from iconsdk.builder.transaction_builder import (DeployTransactionBuilder,
@@ -12,7 +12,7 @@ from iconsdk.builder.transaction_builder import (DeployTransactionBuilder,
 from iconsdk.icon_service import SignedTransaction
 from iconsdk.wallet.wallet import Wallet
 
-from . import service, util, wallet
+from . import service, util, wallet, log
 from .cui import Column, Header, MapPrinter, Row, RowPrinter
 
 
@@ -61,7 +61,7 @@ def get_result(ids: List[str], full: bool = False):
     svc = service.get_instance()
     for id in ids:
         result = svc.get_transaction_result(id, full_response=full)
-        util.dump_json(result)
+        log.tx_result('Result', result, raw=full)
 
 @click.command(help="Get data of the hash")
 @click.argument('hash', nargs=-1)
@@ -214,7 +214,7 @@ def deploy_contract(score: str, params: list[str], *, type: str = None, to: str 
     result = svc.estimate_and_send_tx(tx, mw)
     util.dump_json(result)
 
-def do_transfer(wallet: Wallet, to: str, amount: str):
+def do_transfer(wallet: Wallet, to: str, amount: Union[str,int]) -> dict:
     svc = service.get_instance()
     owner = wallet.get_address()
     balance = svc.get_balance(owner)
@@ -230,20 +230,24 @@ def do_transfer(wallet: Wallet, to: str, amount: str):
     try :
         transfer_steps = svc.estimate_step(tx)
     except BaseException as exc:
-        raise Exception(f'Not transferable to={to}') from exc
-    max_value = balance - (transfer_steps*price)
+        raise click.ClickException(f'Not transferable to={to}') from exc
+    fee = transfer_steps*price
+    max_value = balance - fee
     if max_value < 0:
-        raise Exception(f'Not enough balance to send transfer tx')
+        raise click.ClickException(f'Not enough balance to send transfer tx')
 
-    amount = amount.lower()
-    if amount.endswith('icx'):
-        value = int(float(amount[:-3])*util.ICX)
-    elif amount == 'all':
-        value = max_value
+    if type(amount) is int:
+        value = amount
     else:
-        value = int(amount, 0)
+        amount = str(amount).lower()
+        if amount.endswith('icx'):
+            value = int(float(amount[:-3])*util.ICX)
+        elif amount == 'all':
+            value = max_value
+        else:
+            value = int(amount, 0)
     if value > max_value:
-        raise Exception(f'Not enough balance to transfer {owner} has {util.format_decimals(max_value,3)} ICX')
+        raise click.ClickException(f'Not enough balance to transfer limit = {util.format_decimals(max_value,3)} ICX')
 
     tx = (TransactionBuilder()
           .from_(wallet.get_address())
@@ -253,10 +257,9 @@ def do_transfer(wallet: Wallet, to: str, amount: str):
           .version(3)
           .step_limit(transfer_steps)
     ).build()
-    click.echo(f'Transfering {util.format_decimals(value, 3)} ICX of {owner} to {to}')
+    log.info(f'Transfering {util.format_decimals(value,3)} of {balance/util.ICX:,.3f} to {to}')
     signed_tx = SignedTransaction(tx, wallet)
-    result = svc.send_transaction_and_pull(signed_tx)
-    util.dump_json(result)
+    return svc.send_transaction_and_pull(signed_tx)
 
 @click.command('transfer', help="Transfer native token")
 @click.argument('amount', metavar='<amount>', type=click.STRING)
@@ -272,7 +275,8 @@ def transfer(to: str, amount: str):
     - "<X>" for <X> LOOP.
     '''
     ks = wallet.get_instance()
-    do_transfer(ks, to, amount)
+    result = do_transfer(ks, to, amount)
+    log.tx_result('Transfer', result)
 
 ScaleSearchHeight = 1000_000
 

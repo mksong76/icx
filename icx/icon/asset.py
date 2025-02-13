@@ -13,7 +13,7 @@ from iconsdk.builder.call_builder import CallBuilder
 from iconsdk.builder.transaction_builder import CallTransactionBuilder
 from iconsdk.wallet.wallet import Wallet
 
-from .. import basic, service, util
+from .. import basic, service, util, log
 from ..config import CONTEXT_CONFIG, Config
 from ..cui import Column, RowPrinter
 from ..market import upbit
@@ -92,7 +92,7 @@ class AssetService:
         change = (balance+unstaking)-remain
         if change == 0:
             return
-        self.stake_adjust(wallet, change, stake)
+        return self.stake_adjust(wallet, change, stake)
 
     def stake_adjust(self, wallet: Wallet, change: int, stake: dict = None ):
         if stake is None:
@@ -114,7 +114,7 @@ class AssetService:
             method='setStake',
             params={ 'value': f'0x{target:x}' },
         ).build()
-        self.service.estimate_and_send_tx(tx, wallet)
+        return self.service.estimate_and_send_tx(tx, wallet)
 
 
     def get_delegation(self, address: str) -> dict:
@@ -132,7 +132,7 @@ class AssetService:
 
         voting_power = int(delegation['votingPower'], 0)
         change =  voting_power - target
-        self.delegate_adjust(preps, wallet, change, delegation)
+        return self.delegate_adjust(preps, wallet, change, delegation)
 
     def delegate_adjust(self, preps: List[str], wallet: Wallet, change: int, delegation: dict = None):
         spreps = []
@@ -170,7 +170,7 @@ class AssetService:
             params={ "delegations": new_delegations },
             from_=wallet.get_address(),
         ).build()
-        self.service.estimate_and_send_tx(tx, wallet)
+        return self.service.estimate_and_send_tx(tx, wallet)
 
     def get_bond(self, address: str) -> dict:
         return self.service.call(CallBuilder(
@@ -220,7 +220,7 @@ class AssetService:
             method='setBond',
             params={ 'bonds': new_bonds },
         ).build()
-        self.service.estimate_and_send_tx(tx, wallet)
+        return self.service.estimate_and_send_tx(tx, wallet)
 
 def sum_stake(stake: dict) -> Tuple[int, int, int]:
     staked = int(stake['stake'], 0)
@@ -521,7 +521,8 @@ def transfer(obj: dict, to: str, amount: str):
     - "<X>" for <X> LOOP.
     '''
     wallet = get_wallet()
-    basic.do_transfer(wallet, to, amount)
+    result = basic.do_transfer(wallet, to, amount)
+    log.tx_result('Transfer', result)
 
 def as_int(v: Optional[str], d: Optional[int] = None) -> Optional[int]:
     return d if v is None else int(v, 0)
@@ -666,6 +667,22 @@ def show_reward(obj: dict, address: list[str], height: int = None, terms: int = 
 
 BlockInterval = 2
 
+class ClaimResult(tuple[int,int,int]):
+    def __new__(cls, *args):
+        return super().__new__(cls, args)
+
+    @property
+    def claimed(self) -> int:
+        return self[0]
+
+    @property
+    def processed(self) -> int:
+        return self[1]
+
+    @property
+    def remainder(self) -> int:
+        return self[2]
+
 @click.command('claim')
 @click.argument('action', type=click.Choice(['hold', 'transfer', 'delegate', 'bond']), default='hold')
 @click.option('--all', '-a', is_flag=True, default=False,
@@ -674,23 +691,28 @@ BlockInterval = 2
               metavar='<address>', help='Destination address for the operation')
 @click.option('--period', '-p', type=util.INT, default=0,
               metavar='<period>', help='Number of terms to wait for the next claim')
-def claim_cmd(all: bool, action:str, dest: str, period: timedelta):
-    service = AssetService()
+@click.option('--remainder', '-r', type=util.DecimalType('icx', 18), default=0,
+              metavar='<remainders of claimed>', help='Remainders of claimed rewards')
+def claim_cmd(all: bool, action:str, dest: str, period: timedelta, remainder: int):
+    svc = AssetService()
     wallet = get_wallet()
 
     next_term_seq = None
     while True:
-        prep_term = service.get_prep_term()
+        prep_term = svc.get_prep_term()
         block_height = int(prep_term['blockHeight'], 0)
         term_start = int(prep_term['startBlockHeight'], 0)
         term_end = int(prep_term['endBlockHeight'], 0)
         term_seq = int(prep_term['sequence'], 0)
 
-        click.echo(f'[#] Current block_height={block_height}', file=sys.stderr)
+        log.info(f'Current block_height={block_height}')
 
         if next_term_seq is None or term_seq >= next_term_seq:
             if block_height >= term_start+1:
-                do_claim(service, wallet, all, action, dest)
+                ret = do_claim(svc, wallet, all, action, dest, remainder)
+                if ret is not None:
+                    log.debug(f'ClaimResult claimed={ret.claimed/ICX:.3f}, processed={ret.processed/ICX:.3f}, remainder={ret.remainder/ICX:.3f}')
+                    remainder = ret.remainder
                 if period <= 0:
                     break
                 next_term_seq = term_seq + period
@@ -700,44 +722,63 @@ def claim_cmd(all: bool, action:str, dest: str, period: timedelta):
         if (next_term_seq - term_seq)<=0:
             time.sleep(BlockInterval)
         else:
+            wallet.ensure_loaded()
             target_height = term_end+2
             target_height += (term_end-term_start+1)*(next_term_seq - term_seq - 1)
             delay = timedelta(seconds=(target_height - block_height)*BlockInterval)
-            click.echo(f'[#] Sleep for {delay} for target_height={target_height} ({datetime.now()+delay})', file=sys.stderr)
-            wallet.ensure_loaded()
+            log.info(f'Sleep for {delay} for target_height={target_height} ({datetime.now()+delay})')
             time.sleep(delay.total_seconds())
+            log.debug(f'Sleep DONE')
 
-
-def do_claim(service: AssetService, wallet: Wallet, all: bool, action: str, dest: str):
-    click.echo(f'[#] Checking claimable...', file=sys.stderr)
-    iscore = service.query_iscore(wallet.address)
+def do_claim(svc: AssetService, wallet: Wallet, all: bool, action: str, dest: str, remainder: int = 0) -> Optional[ClaimResult]:
+    log.info('Checking claimable...')
+    iscore = svc.query_iscore(wallet.address)
     claimable = int(iscore['estimatedICX'], 0)
 
     if claimable == 0:
-        click.echo('[!] Nothing to claim', file=sys.stderr)
+        log.warn('Nothing to claim')
         return
     if claimable < ICX and not all:
-        click.echo(f"[!] Too small to claim claimable={claimable/ICX:.3f}", file=sys.stderr)
+        log.warn(f'Too small to claim claimable={claimable/ICX:.3f}')
         return
 
-    click.echo(f'[#] Claiming... claimable={claimable/ICX:.3f}', file=sys.stderr)
-    service.claim_iscore(wallet)
+    log.info(f'Claiming... claimable={claimable/ICX:.3f}')
+    result = svc.claim_iscore(wallet)
+    log.tx_result('Claim', result)
 
-    if claimable < ICX:
-        click.echo(f'[#] Too small claimable={claimable/ICX:.3f} to do {action}', file=sys.stderr)
-        return
+    value = claimable + remainder - util.fee_of(result)
 
-    amount = claimable - (claimable%ICX)
+    if value < ICX:
+        log.warn(f'Too small value={value/ICX:.3f} to do {action}')
+        return ClaimResult(claimable, 0, value)
 
+    remainder = value%ICX
+    amount = value - remainder
+
+    txrs = []
     if action == 'transfer':
         if (dest is None):
             raise click.UsageError('Please specify destination address')
-        basic.do_transfer(wallet, dest, str(amount))
+        result = basic.do_transfer(wallet, dest, amount)
+        log.tx_result(f'Transfer', result)
+        txrs.append(result)
     elif action in ['delegate', 'bond']:
-        service.stake_all(wallet, amount)
+        log.info(f'Stake {amount/ICX:.3f}')
+        result = svc.stake_all(wallet, amount)
+        log.tx_result(f'Stake', result)
+        txrs.append(result)
         if action == 'delegate':
-            service.delegate_adjust([], wallet, amount)
+            log.info(f'Delegate adjust {amount/ICX:.3f}')
+            result = svc.delegate_adjust([], wallet, amount)
+            log.tx_result(f'Delegate', result)
+            txrs.append(result)
         else:
-            service.bond_adjust([], wallet, amount)
+            log.info(f'Bond adjust {amount/ICX:.3f}')
+            result = svc.bond_adjust([], wallet, amount)
+            log.tx_result(f'Bond', result)
+            txrs.append(result)
+    elif action == 'hold':
+        return ClaimResult(claimable, value, 0)
     else:
         raise click.UsageError(f'Unknown action: {action}')
+    return ClaimResult(claimable, amount, remainder-util.fee_of(*txrs))
