@@ -176,9 +176,14 @@ def call(expr: str, param: List[str], value: int = 0, raw: bool = False, step_li
             blk = svc.get_block('latest')
             height = blk['height']+1
         event_filter = make_eventfilter(addr, info, param)
-        spec = EventMonitorSpec(height, event_filter, True)
+        spec = EventMonitorSpec(height, event_filter, True, progress_interval=10)
         monitor = svc.monitor(spec)
         print("Waiting for events", file=sys.stderr)
         while True:
             obj = monitor.read()
+            if 'progress' in obj:
+                print(f'{TC_CLEAR}> Block height={int(obj["progress"], 0)}', end='\r', flush=True, file=sys.stderr)
+                continue
+            else:
+                print(f'{TC_CLEAR}', end='', flush=True, file=sys.stderr)
             dump_json(obj, flush=True)
