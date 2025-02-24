@@ -47,7 +47,7 @@ class MyWallet(Wallet):
     def __get_loaded(self) -> Wallet:
         if self.__wallet is None:
             if self.__password is None:
-                password = click.prompt("WalletPassword", hide_input=True)
+                password = click.prompt("WalletPassword", hide_input=True, err=True)
             else:
                 password = self.__password
             if type(self.src) is str:
@@ -98,7 +98,7 @@ def handleFlag(obj: dict, name: str):
     keystores = config.get(CONFIG_KEYSTORES)
     if name not in keystores:
         click.echo(f'Available keystores:{",".join(keystores.keys())}', file=sys.stderr)
-        raise Exception(f'Unknown keystore name={name}')
+        raise click.ClickException(f'Unknown keystore name={name}')
     default_wallet = MyWallet(keystores[name])
     obj[CONTEXT_KEYSTORE] = name
 
@@ -169,11 +169,12 @@ def main(obj: dict, name: str = None, file: str = None, delete: bool = None, ver
             click.echo(f'Keystore [{name}] is deleted')
             return
         elif verify:
-            password = click.prompt("WalletPassword", hide_input=True)
+            password = click.prompt("WalletPassword", hide_input=True, err=True)
             try:
                 load_wallet_from_dict(keystores[name], password)
             except:
                 click.secho(f'Fail to verify keystore', color='red', file=sys.stderr)
+                return
             click.echo(f'Keystore [{name}] is verified')
             return
         elif rename is not None:
@@ -187,7 +188,7 @@ def main(obj: dict, name: str = None, file: str = None, delete: bool = None, ver
             click.echo(f'Keystore [{name}] is renamed to [{rename}]')
             return
         elif pubkey:
-            password = click.prompt("WalletPassword", hide_input=True)
+            password = click.prompt("WalletPassword", hide_input=True, err=True)
             try:
                 wallet = load_wallet_from_dict(keystores[name], password)
                 click.echo(f'0x{wallet.get_public_key()}', file=sys.stdout)
@@ -199,7 +200,7 @@ def main(obj: dict, name: str = None, file: str = None, delete: bool = None, ver
             return
 
     if verify:
-        password = click.prompt("WalletPassword", hide_input=True)
+        password = click.prompt("WalletPassword", hide_input=True, err=True)
         try:
             KeyWallet.load(file, password)
         except:
