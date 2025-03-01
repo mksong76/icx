@@ -3,6 +3,8 @@
 from copy import deepcopy
 import json
 from typing import Iterator, MutableMapping
+import os
+
 import click
 
 CONTEXT_CONFIG = "config"
@@ -38,12 +40,31 @@ class Config(MutableMapping):
     def __iter__(self) -> Iterator:
         return self.__config.__iter__()
 
+    def items(self) -> Iterator:
+        return self.__config.items()
+
     def __len__(self) -> int:
-        return self.__config.__iter__()
+        return self.__config.__len__()
 
     def save(self) -> None:
-        with click.open_file(self.__file, 'w') as fd:
+        base_dir = os.path.dirname(self.__file)
+        os.makedirs(base_dir, exist_ok=True, mode=0o700)
+
+        opener = lambda name, flags: os.open(name, flags, 0o600)
+        with open(self.__file, 'w', opener=opener) as fd :
             json.dump(self.__config, fd, indent=2)
+
+    def __str__(self) -> str:
+        return self.__config.__str__()
+
+    def __repr__(self) -> str:
+        return self.__config.__repr__()
+
+def ensure_context(ctx: click.Context = None) -> click.Context:
+    return ctx if ctx is not None else click.get_current_context()
+
+def get_instance(ctx: click.Context = None) -> Config:
+    return ensure_context(ctx).obj[CONTEXT_CONFIG]
 
 if __name__ == '__main__':
     config = Config('config.json')
