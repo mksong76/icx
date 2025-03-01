@@ -17,7 +17,7 @@ from .. import basic, service, util, log
 from ..config import CONTEXT_CONFIG, Config
 from ..cui import Column, RowPrinter
 from ..market import upbit
-from ..util import (CHAIN_SCORE, ICX, DecimalType, ensure_address, format_decimals)
+from ..util import (CHAIN_SCORE, ICX, ICX_LOOP, ensure_address, format_decimals)
 from ..wallet import wallet
 from .prep import PRep
 
@@ -499,7 +499,7 @@ def get_wallet_addr() -> Optional[str]:
         return None
 
 @click.command('price')
-@click.argument('amount', type=DecimalType('icx', 18))
+@click.argument('amount', type=ICX_LOOP)
 @click.option('--market', type=str)
 def show_price(amount: int, market: str = None):
     sym, price = get_price()
@@ -691,7 +691,7 @@ class ClaimResult(tuple[int,int,int]):
               metavar='<address>', help='Destination address for the operation')
 @click.option('--period', '-p', type=util.INT, default=0,
               metavar='<period>', help='Number of terms to wait for the next claim')
-@click.option('--remainder', '-r', type=util.DecimalType('icx', 18), default=0,
+@click.option('--remainder', '-r', type=util.ICX_LOOP, default=0,
               metavar='<remainders of claimed>', help='Remainders of claimed rewards')
 def claim_cmd(all: bool, action:str, dest: str, period: timedelta, remainder: int):
     svc = AssetService()

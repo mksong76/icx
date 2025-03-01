@@ -160,6 +160,8 @@ class DecimalType(click.ParamType):
         except ValueError:
             self.fail(f'{value} is not a valid integer', param, ctx)
 
+ICX_LOOP = DecimalType('icx', 18)
+
 class AddressType(click.ParamType):
     name = "address"
     def convert(self, value, param, ctx) -> str:

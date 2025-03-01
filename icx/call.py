@@ -14,7 +14,7 @@ from iconsdk.icon_service import  SignedTransaction
 from iconsdk.monitor import EventMonitorSpec, EventFilter
 
 from . import scoreapi, service, wallet
-from .util import INT, DecimalType, ensure_address, dump_json, ensure_score
+from .util import INT, ICX_LOOP, ensure_address, dump_json, ensure_score
 
 METHOD_FMT = r'(?P<address>[a-z_0-9]+)(\.(?P<method>[a-zA-Z0-9_]+))?'
 RE_METHOD = re.compile(METHOD_FMT)
@@ -97,7 +97,7 @@ def parse_output(outputs: list, output: any) -> any:
 @click.command('call')
 @click.argument('expr')
 @click.argument('param', nargs=-1)
-@click.option('--value', type=DecimalType('icx', 18), default=0, help='Value to transfer')
+@click.option('--value', type=ICX_LOOP, default=0, help='Value to transfer')
 @click.option('--step_limit', '-s', type=INT, help="Step limit")
 @click.option('--height', '-h', type=INT, default=None, help="Block height for query")
 @click.option('--raw', '-r', is_flag=True)
