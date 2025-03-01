@@ -246,7 +246,13 @@ def bookmark_main(obj: dict, name: str, addr: str, delete: bool):
             return
 
     if addr is None:
-        click.echo(f'{name}={bookmark[name]}')
+        if name in bookmark:
+            addr = bookmark[name]
+        elif name in keystores:
+            addr = keystores[name]['address']
+        else:
+            raise click.ClickException(f'Unknown bookmark name={name}')
+        click.echo(addr)
         return
     bookmark[name] = addr
     config[CONFIG_BOOKMARK] = bookmark
