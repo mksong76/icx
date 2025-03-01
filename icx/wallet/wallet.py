@@ -212,7 +212,7 @@ def main(obj: dict, name: str = None, file: str = None, delete: bool = None, ver
         config[CONFIG_KEYSTORES] = keystores
         click.echo(f'Wallet {name} is set as addr={keystore["address"]}')
 
-@click.command('bookmark')
+@click.command('bookmark', help='Address bookmarks')
 @click.argument('name', metavar='[<name>]', type=click.STRING, required=False)
 @click.argument('addr', metavar='[<address>]', type=util.ADDRESS, required=False)
 @click.option('--delete', '-d', type=click.BOOL, is_flag=True, default=False)

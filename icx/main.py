@@ -15,11 +15,21 @@ from .util import datetime_from_ts, format_dt
 CONFIG_NETWORKS='networks'
 
 @click.group()
-@click.option('--config', envvar='ICX_CONFIG')
-@click.option('--net', '-n', type=click.STRING, envvar='ICX_NET')
-@click.option('--url', type=click.STRING, envvar='ICX_RPC_URL')
-@click.option('--nid', type=click.STRING, envvar='ICX_RPC_NID')
-@click.option('--ks', type=click.STRING, envvar='ICX_KEYSTORE')
+@click.option('--config', envvar='ICX_CONFIG',
+             metavar='<config.json>',
+             help='Configuration JSON file')
+@click.option('--net', '-n', envvar='ICX_NET',
+             metavar='<name>',
+             help='Name of pre-defined network')
+@click.option('--url', envvar='ICX_RPC_URL',
+             metavar='<rpc url>',
+             help='RPC URL for the network')
+@click.option('--nid', envvar='ICX_RPC_NID',
+             metavar='<nid>',
+             help='Network ID for the network')
+@click.option('--ks', envvar='ICX_KEYSTORE',
+             metavar='<name|keystore.json>',
+             help='Name of the keystore or keystore file')
 @click.pass_context
 def main(ctx: click.Context, net: str = None, url: str = None, nid: str = None, config: str = None, ks: str = None):
     ctx.ensure_object(dict)
