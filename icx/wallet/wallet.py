@@ -10,7 +10,7 @@ import click
 from iconsdk.wallet.wallet import KeyWallet, Wallet
 from eth_keyfile import  extract_key_from_keyfile
 
-from .. import util
+from .. import util, log
 from icx.config import CONTEXT_CONFIG, Config
 from icx.cui import Column, RowPrinter
 
@@ -118,7 +118,7 @@ def print_keystores(keystores: dict):
         return
     columns = [
         Column(lambda name, info: name, 10, name='Name'),
-        Column(lambda name, info: info['address'], 60, name='Address'),
+        Column(lambda name, info: info['address'], 42, name='Address'),
     ]
     printer = RowPrinter(columns)
     printer.print_separater()
@@ -221,39 +221,47 @@ def bookmark_main(obj: dict, name: str, addr: str, delete: bool):
     config = obj[CONTEXT_CONFIG]
     keystores = config.get(CONFIG_KEYSTORES)
     bookmark = config.get(CONFIG_BOOKMARK)
+
+    addrs =  [(k, ('ks', v['address'])) for k, v in keystores.items()]\
+        + [(k, ('bk', v)) for k, v in bookmark.items()]
+    bookmarks = dict(addrs)
+
     if name is None:
         columns = [
-            Column(lambda t, k, v: t.upper(),  2, format='{:2^}',name='Type'),
-            Column(lambda t, k, v: k, 20, name='Name'),
-            Column(lambda t, k, v: v, 42, name='Address'),
+            Column(lambda k, t, v: t.upper(),  2, format='{:2^}',name='Type'),
+            Column(lambda k, t, v: k, 10, name='Name'),
+            Column(lambda k, t, v: v, 42, name='Address'),
         ]
-        printer = RowPrinter(columns)
-        printer.print_header()
-        for k, v in keystores.items():
-            printer.print_data('ks', k, v['address'], underline=True)
-            # click.echo(f'{k}={v["address"]}')
-        for k, v in bookmark.items():
-            printer.print_data('bk', k, v, underline=True)
-            # click.echo(f'{k}={v}')
-        return
 
-    if delete:
-        if name in bookmark:
-            del(bookmark, name)
-            config[CONFIG_BOOKMARK] = bookmark
-        else:
-            click.secho(f'No bookmark named {name}', color='red', file=sys.stderr)
+        if len(addrs) == 0:
+            click.echo(f'No bookmarks are registered', file=sys.stderr)
             return
 
+        printer = RowPrinter(columns)
+        printer.print_header()
+        for name, v in addrs:
+            printer.print_data(name, v[0], v[1], underline=True)
+        return
+
     if addr is None:
-        if name in bookmark:
-            addr = bookmark[name]
-        elif name in keystores:
-            addr = keystores[name]['address']
-        else:
+        if name not in bookmarks:
             raise click.ClickException(f'Unknown bookmark name={name}')
+
+        tname, addr = bookmarks[name]
+
+        if delete:
+            if tname == 'bk':
+                del bookmark[name]
+                config[CONFIG_BOOKMARK] = bookmark
+                log.info(f'Bookmark [{name}] is deleted')
+                return
+            else:
+                log.error(f'Cannot delete keystore [{name}]')
+                return
+
         click.echo(addr)
         return
+
     bookmark[name] = addr
     config[CONFIG_BOOKMARK] = bookmark
 
