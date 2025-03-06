@@ -10,6 +10,7 @@ from . import (basic, blockinterval, blockvotes, btp, call, icon, inspect,
                network, rlp, scoreapi, service, trace, txscan, verifytx,
                wallet)
 from .config import CONTEXT_CONFIG, Config
+from .market import exchange
 from .util import datetime_from_ts, format_dt
 
 CONFIG_NETWORKS='networks'
@@ -100,6 +101,7 @@ main.add_command(icon.main)
 main.add_command(icon.assets)
 main.add_command(icon.preps)
 main.add_command(icon.proposal_main)
+main.add_command(exchange.main)
 
 if __name__ == '__main__':
     main()

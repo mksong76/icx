@@ -1,3 +1,6 @@
 click
 iconsdk
 eth-keyfile
+ccxt
+plotext
+pandas

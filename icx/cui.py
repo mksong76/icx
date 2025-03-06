@@ -16,6 +16,44 @@ def get_align_of(s: Optional[str]) -> str:
         return '^'
     return '<'
 
+class Styled:
+    def __new__(cls, value: any, **kwargs):
+        if len(kwargs) == 0:
+            return value
+        return super().__new__(cls)
+
+    def __init__(self, value: any, **kwargs) -> None:
+        if isinstance(value, Styled):
+            self.__value = value.value
+            self.__style = value.style.copy()
+            self.__style.update(kwargs)
+        else:
+            self.__value = value
+            self.__style = kwargs
+
+    @property
+    def value(self) -> any:
+        return self.__value
+
+    @property
+    def style(self) -> dict:
+        return self.__style
+
+    def __format__(self, format_spec):
+        s = self.__value.__format__(format_spec)
+        return click.style(s, **self.__style)
+
+    @staticmethod
+    def wrap(value: any, style: Optional[dict] = None) -> any:
+        return Styled(value, **style) if style is not None else value
+
+    @classmethod
+    def unwrap(cls, v: any) -> tuple[any, dict]:
+        if isinstance(v, Styled):
+            return v.__value, v.__style
+        else:
+            return v, None
+
 class Column:
     def __init__(self, get_value, size: int, format: str = None, name: str = '') -> None:
         self.__get_value = get_value
@@ -40,11 +78,12 @@ class Column:
 
     def get_str(self, *args) -> str:
         if self.__value_format is not None:
-            value = self.get_value(*args)
+            value, style = Styled.unwrap(self.get_value(*args))
             if isinstance(value, tuple):
-                return self.__value_format.format(*value)
+                ss = self.__value_format.format(*value)
             else:
-                return self.__value_format.format(value)
+                ss = self.__value_format.format(value)
+            return Styled.wrap(ss, style)
         else:
             return self.get_value(*args)
 
@@ -65,7 +104,6 @@ class RowPrinter:
         formats = []
         seps = []
         names = []
-        hdr_formats = []
         for column in columns:
             formats.append(column.format)
             seps.append('-'*column.size)
@@ -172,7 +210,7 @@ class MapPrinter:
 
     def print_data(self, *args, **kwargs) -> 'MapPrinter':
         for row in self.__rows:
-            value = row.get_str(*args)
+            value, style = Styled.unwrap(row.get_str(*args))
             align = row.get_align()
 
             if isinstance(row, Header):
@@ -184,6 +222,7 @@ class MapPrinter:
                     **kwargs)
             else:
                 format_str = self.__name_value_format(align)
+                value_style = style if len(kwargs) == 0 else None
 
                 name = row.name
                 texts = value.splitlines(True)
@@ -192,7 +231,7 @@ class MapPrinter:
                     text_lines = textwrap.wrap(text, self.__max_value)
                     lines += text_lines
                 while len(lines) > 0:
-                    line = lines.pop(0)
+                    line = Styled.wrap(lines.pop(0), value_style)
                     kwargs_line = dict(**kwargs)
                     if len(lines) > 0 and 'underline' in kwargs_line:
                         kwargs_line.pop('underline')
