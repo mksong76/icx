@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 
+import abc
+from functools import reduce
+import math
 import sys
 import textwrap
-from typing import List, Optional
+from typing import List, Optional, Union
 
 import click
 
@@ -55,17 +58,17 @@ class Styled:
             return v, None
 
 class Column:
-    def __init__(self, get_value, size: int, format: str = None, name: str = '') -> None:
+    def __init__(self, get_value, size: int, format: str = None, name: str = '', *, span: int = 1) -> None:
         self.__get_value = get_value
         size = max(size, len(name))
         self.__size = size
         align = get_align_of(format)
         if size == 0:
-            self.__format = '{}'
-        else:
-            self.__format = f'{{:{align}{size}.{size}}}'
+            raise ValueError(f'Invalid {size=}')
+        self.__format = f'{{:{align}{size}.{size}}}'
         self.__value_format = format
         self.__name = name
+        self.__span = span
 
     def get_align(self) -> str:
         return get_align_of(self.__value_format)
@@ -92,21 +95,204 @@ class Column:
         return self.__size
 
     @property
+    def span(self):
+        return self.__span
+
+    @property
     def format(self):
         return self.__format
+    
+    def format_for(self, size: int) -> str:
+        align = get_align_of(self.__format)
+        return f'{{:{align}{size}.{size}}}'
 
     @property
     def name(self):
         return self.__name
 
+
+def get_column_sizes(*rows: List[Column]) -> tuple[List[int]]:
+    sizes = None
+    for row in rows:
+        if isinstance(row, Separater):
+            continue
+        cnt = reduce(lambda cnt, col: cnt+col.span, row, 0)
+        if sizes is None:
+            sizes = [None] * cnt
+        elif len(sizes) != cnt:
+            raise ValueError(f'InvalidColumnCount({len(sizes)}!={cnt})')
+
+    constraints = {}
+    for row in rows:
+        if isinstance(row, Separater):
+            continue
+        idx = 0
+        for col in row:
+            if col.span == 1:
+                sizes[idx] = max(col.size, sizes[idx] or 0)
+            else:
+                ckey = (idx, col.span)
+                constraints[ckey] = max(constraints.get(ckey, 0), col.size)
+            idx += col.span
+
+    constraints_map: dict[int,list] = {}
+    for (start, span), size in constraints.items():
+        filled = reduce(
+            lambda s, c: s+(c is not None),
+            sizes[start:start+span], 0)
+        reserved = reduce(
+            lambda s, c: s+(c or 0),
+            sizes[start:start+span], 0) + (span-1)*3
+
+        if filled == span:
+            if reserved >= size:
+                continue
+            new_size = size - reserved
+            constraint = [start, span, new_size]
+            for idx in range(start, start+span):
+                constraints_map.setdefault(idx, [])
+                constraints_map[idx].append(constraint)
+        else:
+            new_size = size - reserved
+            new_cols = span - filled
+            new_base = new_size // new_cols
+            ex_cnt = new_size % new_cols
+
+            for idx in range(start, start+span):
+                if sizes[idx] is not None:
+                    continue
+                sizes[idx] = new_base
+                if ex_cnt > 0:
+                    sizes[idx] += 1
+                    ex_cnt -= 1
+
+    # To minimize total columns, it expands the columns with maximum
+    # count of constraints by the same size. Then repeat it until
+    # there is no constraints to handle.
+
+    cons_by_col = list(constraints_map.items())
+    cons_by_col.sort(key=lambda c: len(c[1]), reverse=True)
+    while len(cons_by_col) > 0:
+        # fetch items with same depth
+        depth = len(cons_by_col[0][1])
+        group = list(filter(lambda c: len(c[1]) == depth, cons_by_col))
+        del cons_by_col[0:len(group)]
+
+        # get minimum average column size to expand
+        size = math.ceil(min([
+            min(map(lambda con: con[2]/con[1], cons)) for _, cons in group
+        ]))
+
+        # expand columns as possible as much
+        for idx, cons in group:
+            sizes[idx] += size
+            ncons = []
+            for con in cons:
+                con[2] -= size
+                if con[2] > 0:
+                    ncons.append(con)
+            if len(ncons) > 0:
+                cons_by_col.append((idx, ncons))
+
+        cons_by_col.sort(key=lambda c: len(c[1]), reverse=True)
+
+    size_db = []
+    for row in rows:
+        if isinstance(row, Separater):
+            size_db.append(None)
+            continue
+        idx = 0
+        row_sizes = []
+        for col in row:
+            size = sum(sizes[idx:idx+col.span]) + (col.span-1)*3
+            row_sizes.append(size)
+            idx += col.span
+        size_db.append(row_sizes)
+    return size_db
+
+class Printer(metaclass=abc.ABCMeta):
+    @abc.abstractmethod
+    def print_data(self, *args, **kwargs):
+        pass
+
+    @abc.abstractmethod
+    def print_separater(self, **kwargs):
+        pass
+
+    @abc.abstractmethod
+    def print_header(self):
+        pass
+
+class Separater:
+    def __init__(self, **kwargs):
+        self.__style = kwargs
+
+    @property
+    def style(self) -> dict:
+        return self.__style
+
+class SeparatorPrinter(Printer):
+    def __init__(self, printer: Printer, sep: "Separater") -> None:
+        if printer is None:
+            raise ValueError(f'InvalidPrinter({printer})')
+        self.__printer = printer
+        self.__separator = sep
+    
+    def print_header(self):
+        pass
+
+    def print_data(self, *args, **kwargs):
+        self.__printer.print_separater(**self.__separator.style, **kwargs)
+
+    def print_separater(self, **kwargs):
+        return self.__printer.print_separater(**kwargs)
+
+
+RowFormat = Union[List[Column],Separater]
+
+class MultiRowPrinter(Printer):
+    def __init__(self, rows: List[RowFormat], file=sys.stdout) -> None:
+        if len(rows) == 0:
+            raise ValueError(f'InvalidRowCount({len(rows)})')
+        size_db = get_column_sizes(*rows)
+        self.__printers: list[Printer] = []
+        self.__primary = None
+        for idx, row in enumerate(rows):
+            if isinstance(row, Separater):
+                printer = SeparatorPrinter(self.__primary, row)
+            else:
+                printer = RowPrinter(row, size_db[idx], file)
+                if self.__primary is None:
+                    self.__primary = printer
+            self.__printers.append(printer)
+        if self.__primary is None:
+            raise ValueError(f'NoPrimaryRow')
+
+    def print_header(self):
+        self.__primary.print_header()
+
+    def print_data(self, *args, **kwargs):
+        for p in self.__printers:
+            p.print_data(*args, **kwargs)
+
+    def print_separater(self, **kwargs):
+        return self.__primary.print_separater(**kwargs)
+
+
 class RowPrinter:
-    def __init__(self, columns: List[Column], file=sys.stdout) -> None:
+    def __init__(self, columns: List[Column], sizes: List[int]=None, file=sys.stdout) -> None:
         formats = []
         seps = []
         names = []
-        for column in columns:
-            formats.append(column.format)
-            seps.append('-'*column.size)
+        for idx, column in enumerate(columns):
+            if sizes is None:
+                size = column.size
+                format = column.format
+            else:
+                size = sizes[idx]
+                format = column.format_for(size)
+            formats.append(format)
+            seps.append('-'*size)
             names.append(column.name)
         self.__columns = columns
         self.__file = file
@@ -141,6 +327,12 @@ class RowPrinter:
         format_str = '| ' + ' | '.join(formats) + ' |'
         click.secho(format_str.format(*data), file=self.__file, **kwargs)
 
+    def print_custom(self, cols: list[Column], *args, **kwargs):
+        row = []
+        for col in cols:
+            row.append((col.span, col.get_str(*args), col.get_align()))
+        self.print_row(row, **kwargs)
+
     def print_row(self, cols: list[tuple[int,any,str]], **kwargs):
         formats = []
         values = []
@@ -152,9 +344,10 @@ class RowPrinter:
             for i in range(size):
                 c = self.__columns[i+idx]
                 spanned += c.size+3
+            spanned -= 3
             idx += size
             align = get_align_of(align)
-            formats.append(f'{{:{align}{spanned-3}}}')
+            formats.append(f'{{:{align}{spanned}.{spanned}}}')
             values.append(value)
         format_str = '| ' + ' | '.join(formats) + ' |'
         click.secho(format_str.format(*values), file=self.__file, **kwargs)

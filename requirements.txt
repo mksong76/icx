@@ -4,3 +4,4 @@ eth-keyfile
 ccxt
 plotext
 pandas
+rich

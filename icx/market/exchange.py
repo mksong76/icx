@@ -1,14 +1,16 @@
 import asyncio
+import copy
 import json
 import sys
 from functools import reduce
 from typing import Optional, TypeVar, Union
 from datetime import datetime
 
-import ccxt.async_support as ccxt
+import ccxt.pro as ccxt
 import click
 import plotext as plt
 import pandas as pd
+from rich.console import Console
 
 from .. import config, cui, log, util
 
@@ -68,18 +70,9 @@ minute_ms = 60 * 1000
 hour_ms = 60 * minute_ms
 day_ms = 24 * hour_ms
 
-# chart_label_config = {
-#     "1d": ("%Y-%m-%d", 28 * day_ms),
-#     "4h": ("%Y-%m-%d", 6*7 * 4 * hour_ms),
-#     "1h": ("%Y-%m-%d", 24 * hour_ms),
-#     "1m": ("%Y-%m-%d", 30 * minute_ms),
-#     "15m": ("%Y-%m-%d %H:%M", 6 * 4 * 15 * minute_ms),
-#     "30m": ("%Y-%m-%d %H:%M", 6 * 4 * 30 * minute_ms),
-# }
-
 def TS(v: int) -> datetime:
-    return datetime.fromtimestamp(v/1000, tz=util.UTC)
-    # return datetime.fromtimestamp(v/1000).astimezone()
+    # return datetime.fromtimestamp(v/1000, tz=util.UTC)
+    return datetime.fromtimestamp(v/1000).astimezone()
 
 def monday(ts: datetime) -> bool:
     print(ts.hour)
@@ -87,32 +80,45 @@ def monday(ts: datetime) -> bool:
 chart_label_config = {
     "1w": ("%Y-%m-%d", lambda ts: ts.day<=7 and (ts.month-1)%3 == 0),
     "1d": ("%Y-%m-%d", lambda ts: ts.day == 1),
-    "4h": ("%Y-%m-%d %H:%M", lambda ts: (ts.weekday() == 0 and ts.hour == 0) or (ts.weekday() == 3 and ts.hour == 12)),
+    "4h": ("%Y-%m-%d %H:%M", lambda ts: (ts.weekday() == 0 and ts.hour//4 == 0) or (ts.weekday() == 3 and ts.hour//4 == 3)),
     "1h": ("%Y-%m-%d", lambda ts: ts.hour == 0),
     "30m": ("%Y-%m-%d %H:%M", lambda ts: ts.minute < 30 and ts.hour%12 == 0),
     "15m": ("%Y-%m-%d %H:%M", lambda ts: ts.minute < 15 and ts.hour%6 == 0),
     "1m": ("%Y-%m-%d %H:%M", lambda ts: ts.minute % 30 == 0),
 }
 
-async def show_market(conn: ccxt.Exchange, market: str, interval: str = "1h"):
-    if interval not in chart_label_config:
-        raise click.ClickException(f"Unknown interval={interval}")
-
-    # cnt = (plt.tw()-10)
+async def show_market(conn: ccxt.Exchange, market: str, timeframe: str = "1h"):
+    if timeframe not in chart_label_config:
+        raise click.ClickException(f"Unknown timeframe={timeframe}")
     cnt = (plt.tw()-10)//2
-    ticker, book, ohlcv = await asyncio.gather(
-        conn.fetch_ticker(market),
-        conn.fetch_order_book(market),
-        conn.fetch_ohlcv(market, interval, limit=cnt),
-    )
 
-    title = '{market} / High:{high} / Last:{last} / Low:{low} / Avg:{average} / Interval:{interval}'.format(
-        market=market, interval=interval, **ticker)
+    ticker, ohlcv, book = await asyncio.gather(
+        conn.fetch_ticker(market),
+        conn.fetch_ohlcv(market, timeframe, limit=cnt),
+        conn.fetch_order_book(market),
+    )
+    show_chart(market, timeframe, ticker, ohlcv)
+    show_orderbook(book)
+
+def show_chart(market, timeframe, ticker, ohlcv):
+    draw_chart(market, timeframe, ticker, ohlcv)
+    plt.show()
+    plt.clear_figure()
+
+def render_chart(market, timeframe, ticker, ohlcv) -> str:
+    draw_chart(market, timeframe, ticker, ohlcv)
+    output = plt.build()
+    plt.clear_figure()
+    return output
+
+def draw_chart(market, timeframe, ticker, ohlcv):
+    title = '{market} / High:{high} / Last:{last} / Low:{low} / Avg:{average} / Interval:{timeframe}'.format(
+        market=market, timeframe=timeframe, **ticker)
 
     height = max(plt.th()//2, min(30, plt.th()))
-    label_config = chart_label_config[interval]
+    
     df = pd.DataFrame(
-        ohlcv, columns=["datetime", "open", "high", "low", "close", "volume"]
+        copy.deepcopy(ohlcv), columns=["datetime", "open", "high", "low", "close", "volume"]
     )
     df.rename(columns={
         'datetime': 'time',
@@ -140,15 +146,15 @@ async def show_market(conn: ccxt.Exchange, market: str, interval: str = "1h"):
     plt.text(str(high), x=mid_x, y=high, color='white', alignment='center')
     plt.text(str(low), x=mid_x, y=low, color='white', alignment='center')
 
+    label_config = chart_label_config[timeframe]
     xticks = list(filter(lambda ts: label_config[1](TS(ts)), df['time']))
-    xticklabels = [pd.to_datetime(ts, unit='ms').strftime(label_config[0]) for ts in xticks]
+    xticklabels = [to_datetime(ts).strftime(label_config[0]) for ts in xticks]
     plt.xticks(xticks, xticklabels)
     for tick in xticks:
         plt.vertical_line(tick, color='gray')
     plt.grid()
-    plt.show()
-    plt.clear_figure()
 
+def show_orderbook(book: dict):
     bar_labels = []
     bar_values = []
     bar_colors = []
@@ -165,9 +171,6 @@ async def show_market(conn: ccxt.Exchange, market: str, interval: str = "1h"):
     plt.simple_bar(bar_labels, bar_values, color=bar_colors)
     plt.show()
     plt.clear_figure()
-
-    return
-
 
 @main.command("config", help="Manipulate exchange configurations")
 @click.argument(
@@ -292,6 +295,66 @@ async def exchange_asset(names: list[str], raw: bool):
                 continue
             p.print_data(v, base, underline=True)
 
+async def exchange_sell_deposit(conn: ccxt.Exchange, market: str):
+    base = conn.markets[market]['base']
+    timestamp: int = None
+    finished: list = []
+    console = Console(
+        log_path=False, stderr=True, highlight=False,
+        log_time_format="[%Y-%m-%d %H:%M:%S]",
+    )
+    async def wait_next():
+        with console.status('Sleep 60 seconds for the next deposit...'):
+            await asyncio.sleep(60)
+
+    async def wait_ready():
+        with console.status('Sleep 5 seconds for ready...'):
+            await asyncio.sleep(5)
+
+    while True:
+        with console.status('Fetch deposits ...'):
+            deposits = await conn.fetch_deposits(base, since=timestamp)
+
+        if timestamp is None:
+            timestamp = max(deposits, key=lambda d: d["timestamp"])['timestamp']
+            console.log(f'Waits for the deposits since {dt(timestamp)}')
+            await wait_next()
+            continue
+
+        new_items = list(filter(lambda d: d['timestamp'] > timestamp, deposits))
+
+        if len(new_items) == 0:
+            await wait_next()
+            continue
+
+        unfinished = list(filter(lambda d: d['id'] not in finished, new_items))
+
+        if len(unfinished) == 0:
+            timestamp = max(new_items, key=lambda d: d["timestamp"])['timestamp']
+            finished.clear()
+            console.log(f'Waits for the deposits since {dt(timestamp)}')
+            await wait_next()
+            continue
+
+        ready = list(filter(lambda d: d['status'] == 'ok', unfinished))
+
+        if len(ready) == 0:
+            await wait_ready()
+            continue
+
+        for item in ready:
+            with console.status(f'Sell deposit {Deposit.amount(item)} at {dt(item["timestamp"])}'):
+                console.log(f'Start to sell {Deposit.amount(item)} depositted at {dt(item["timestamp"])}')
+                order = await conn.create_order(market, 'market', 'sell', item['amount'])
+                console.log(f'The order is CREATED id={order["id"]}')
+                while True:
+                    order_detail = await conn.get_order(order['id'])
+                    if order_detail['status'] == 'closed':
+                        console.log(f'The order is CLOSED')
+                        finished.append(item['id'])
+                        break
+                    await asyncio.sleep(1)
+
 
 @main.command('sell', help='Sell currency')
 @click.argument('exchange', type=click.STRING, metavar='<exchange>')
@@ -329,6 +392,8 @@ async def exchange_sell(
 
         if amount == "all":
             amount_value = available
+        elif amount == 'deposit':
+            await exchange_sell_deposit(conn, market)
         else:
             amount_value = float(amount)
         if amount_value > available:
@@ -347,34 +412,92 @@ async def exchange_sell(
         click.secho(json.dumps(order, indent=2), dim=True, file=sys.stderr)
         click.echo(order["id"])
 
-def fvalue(v: Optional[float], d: str = "") -> str:
-    if v is None:
+def fvalue(v: Optional[float], d: str = "", currency: Optional[str] = None) -> str:
+    if not v:
         return d
+    elif currency is None:
+        return f'{v:,g}'
     else:
-        return f'{v:,f}'
+        return f'{v:,g} {currency}'
 
-keyword_styles: dict[str, dict] = {
-    'buy': dict(fg='bright_green', bold=True),
-    'sell': dict(fg='bright_red', bold=True),
-    'closed': dict(dim=True),
-}
+def to_datetime(v: Union[int, str, datetime]) -> datetime:
+    if isinstance(v, datetime):
+        return v
+    if isinstance(v, str):
+        v = int(v, 0)
+    elif not isinstance(v, int):
+        v = int(v)
+    return datetime.fromtimestamp(v/1000).astimezone()
 
-def kw(v: str) -> Union[str,cui.Styled]:
-    return cui.Styled.wrap(v, keyword_styles.get(v.lower(), None))
+def dt(v: Union[int, str, datetime]) -> str:
+    return to_datetime(v).strftime('%Y-%m-%d %H:%M')
 
-def dt(v: int) -> str:
-    ts = datetime.fromtimestamp(v/1000).astimezone()
-    return ts.strftime('%Y-%m-%d %H:%M')
+class Order:
+    keyword_styles: dict[str, dict] = {
+        'buy': dict(fg='bright_green', bold=True),
+        'sell': dict(fg='bright_red', bold=True),
+        'closed': dict(dim=True),
+        'open': dict(fg='yellow'),
+    }
 
-order_table = [
-    # cui.Header(lambda x: x["id"], 40, "{:<40}", "ID"),
-    cui.Header(lambda x: dt(x["timestamp"]), 16, "{:<16}", "Datetime"),
-    cui.Column(lambda x: x["symbol"], 10, "{:^}", "Market"),
-    cui.Column(lambda x: kw(x["side"].upper()), 4, "{:^}", "Side"),
-    cui.Column(lambda x: fvalue(x["amount"]), 14, "{:>}", "Amount"),
-    cui.Column(lambda x: fvalue(x["price"], '-'), 14, "{:>}", "Price"),
-    cui.Column(lambda x: kw(x["status"].upper()), 14, "{:^}", "Status"),
-]
+    BUY = cui.Styled('BUY', fg='bright_green', bold=True)
+    SELL = cui.Styled('SELL', fg='bright_red', bold=True)
+
+    @classmethod
+    def side(clz, x: dict) -> any:
+        if x['side'] == 'buy':
+            return clz.BUY
+        else:
+            return clz.SELL
+
+    OPEN = cui.Styled('OPEN', fg='bright_yellow', bold=True, reverse=True)
+
+    @classmethod
+    def status(clz, x: dict) -> any:
+        status = x['status']
+        if status == 'open':
+            return clz.OPEN
+        return cui.Styled(status.upper(), bold=True, reverse=True)
+
+    @staticmethod
+    def amount(x: dict, currency: Optional[str] = None):
+        return fvalue(x['amount'], '-', currency)
+
+    @staticmethod
+    def fee(x: dict):
+        fee = x['fee']
+        if fee:
+            return fvalue(float(fee["cost"]), '-', fee["currency"])
+        else:
+            return '-'
+
+    cols1 = [
+        cui.Column(lambda x: x["exchange"], 10, "{:<10}", "Exchange"),
+        cui.Column(lambda x: dt(x["timestamp"]), 16, "{:<16}", "Datetime"),
+        cui.Column(lambda x: x["symbol"], 10, "{:^}", "Market"),
+        cui.Column(lambda x: Order.amount(x), 10, "{:>}", "Amount"),
+        cui.Column(lambda x: fvalue(x["price"], '-'), 10, "{:>}", "Price"),
+        cui.Column(lambda x: Order.status(x), 14, "{:^}", "Status"),
+    ]
+    cols2 = [
+        cui.Column(lambda x: x["id"], 40, "{:<40}", 'ID', span=2),
+        cui.Column(lambda x: Order.side(x), 4, "{:^}", "Side"),
+        cui.Column(lambda x: fvalue(x["filled"], '-'), 10, "{:>}", "Filled"),
+        cui.Column(lambda x: fvalue(x["cost"], '-'), 10, "{:>}", "Cost"),
+        cui.Column(lambda x: Order.fee(x), 10, "{:>}", "Fee"),
+    ]
+
+    detail = [
+        cui.Column(lambda x, _: dt(x["timestamp"]), 16, "{:<16}", "Datetime"),
+        cui.Column(lambda x, _: x["symbol"], 10, "{:^}", "Market"),
+        cui.Column(lambda x, _: Order.side(x), 4, "{:^}", "Side"),
+        cui.Column(lambda x, m: fvalue(x['amount'], '', m['base']), 10, "{:>}", "Amount"),
+        cui.Column(lambda x, m: fvalue(x["price"], '-', m['quote']), 10, "{:>}", "Price"),
+        cui.Column(lambda x, m: fvalue(x['filled'], '-', m['base']), 10, "{:>}", "Filled"),
+        cui.Column(lambda x, m: fvalue(x["cost"], '-', m['quote']), 10, "{:>}", "Cost"),
+        cui.Column(lambda x, _: Order.fee(x), 10, "{:>}", "Fee"),
+        cui.Column(lambda x, _: Order.status(x), 14, "{:^}", "Status"),
+    ]
 
 class ExchangeList(list):
     def __new__(cls, *args):
@@ -389,6 +512,22 @@ class ExchangeList(list):
         for x in self:
             await x.__aexit__(*args)
 
+    @staticmethod
+    def get(exchange: str = None) -> 'ExchangeList':
+        configs = get_exchange_configs()
+        if exchange is None:
+            exchanges = [get_connection(name, cfg) for name, cfg in configs.items()]
+        elif exchange in configs:
+            exchanges = [get_connection(exchange, configs[exchange])]
+        else:
+            if exchange not in ccxt.exchanges:
+                raise click.ClickException(f'Unknown exchange={exchange}')
+            raise click.ClickException(f"Missing configuration for exchange={exchange}")
+        if len(exchanges) == 0:
+            raise click.ClickException(f'No configured exchagnes')
+        return ExchangeList(exchanges)
+
+
 def feature(conn: ccxt.Exchange, *args) -> bool:
     obj: any = conn.features
     for arg in args:
@@ -401,45 +540,62 @@ def feature(conn: ccxt.Exchange, *args) -> bool:
 @main.command('order', help='Query order of the exchange')
 @click.argument('exchange', type=click.STRING, metavar='<exchange>', required=False)
 @click.argument('id', type=click.STRING, metavar='<id>', required=False)
+@click.argument('operation', type=click.Choice(['cancel', 'show']),
+                default='show', required=False, metavar='<operation>')
 @click.option('--market', '-m', type=click.STRING, metavar='<market>')
-@click.option('--closed', '-c', type=click.STRING, is_flag=True)
 @click.option('--raw', '-r', type=click.STRING, is_flag=True)
 @run_async
-async def exchange_order(exchange: str, id: str, market: str, raw: bool, closed: bool):
-    # exchanges: list[ccxt.Exchange] = None
-    configs = get_exchange_configs()
-    if exchange is None:
-        exchanges = [get_connection(name, cfg) for name, cfg in configs.items()]
-    elif exchange in configs:
-        exchanges = [get_connection(exchange, configs[exchange])]
-    else:
-        if exchange not in ccxt.exchanges:
-            raise click.ClickException(f'Unknown exchange={exchange}')
-        raise click.ClickException(f"Missing configuration for exchange={exchange}")
-
-    async with ExchangeList(exchanges) as exchanges:
-        if len(exchanges) == 0:
-            raise click.ClickException(f'No configured exchagnes')
-
+async def exchange_order(exchange: str, id: str, market: str, raw: bool, operation: str):
+    async with ExchangeList.get(exchange) as exchanges:
         if id is not None:
-            tasks = [asyncio.create_task(conn.fetch_order(id)) for conn in exchanges]
-            for as_completed in asyncio.as_completed(tasks):
-                try :
-                    result = await as_completed
-                    print(result)
-                    return
-                except:
-                    continue
-            raise click.ClickException(f'Unknown order id={id}')
+            conn: ccxt.Exchange = exchanges[0]
+
+            if operation == 'show':
+                order = await conn.fetch_order(id)
+                if raw:
+                    util.dump_json(order)
+                else:
+                    p = cui.MapPrinter(Order.detail)
+                    p.print_separater()
+                    p.print_header()
+                    p.print_separater()
+                    p.print_data(order, conn.markets[order['symbol']])
+                    p.print_separater()
+                return
+            elif operation == 'cancel':
+                order = await conn.fetch_order(id)
+                if order['status'] != 'open':
+                    raise click.ClickException('The order is not open')
+                res = click.prompt('Cancel the order? (y/n)',
+                                   default='y',
+                                   type=click.Choice(['y', 'n']),
+                                   err=True)
+                if res == 'y':
+                    await conn.cancel_order(id)
+                return
+            else:
+                raise click.ClickException(f'Unhandled operation={operation}')
 
         kwargs = {}
         if market is not None:
             kwargs['symbol'] = market.upper()
 
-        tasks = [asyncio.create_task(conn.fetch_open_orders(**kwargs)) for conn in exchanges]
+        async def fetch_open_orders(conn, **kwargs):
+            orders = await conn.fetch_open_orders(**kwargs)
+            for order in orders:
+                order['exchange'] = conn.id
+            return orders
+
+        async def fetch_closed_orders(conn, **kwargs):
+            orders = await conn.fetch_closed_orders(**kwargs)
+            for order in orders:
+                order['exchange'] = conn.id
+            return orders
+
+        tasks = [asyncio.create_task(fetch_open_orders(conn, **kwargs)) for conn in exchanges]
         if market is None:
             exchanges = list(filter(lambda x: not feature(x,'spot','fetchClosedOrders','symbolRequired'), exchanges))
-        tasks.extend([asyncio.create_task(conn.fetch_closed_orders(**kwargs)) for conn in exchanges])
+        tasks.extend([asyncio.create_task(fetch_closed_orders(conn, **kwargs)) for conn in exchanges])
 
         orders = []
         for as_completed in asyncio.as_completed(tasks):
@@ -448,6 +604,7 @@ async def exchange_order(exchange: str, id: str, market: str, raw: bool, closed:
                 orders.extend(result)
             except:
                 continue
+        orders.sort(key=lambda x: x['timestamp'])
 
         if raw:
             util.dump_json(orders)
@@ -457,31 +614,100 @@ async def exchange_order(exchange: str, id: str, market: str, raw: bool, closed:
             log.info(f'No orders')
             return
 
-        p = cui.RowPrinter(order_table)
+        p = cui.MultiRowPrinter([
+            Order.cols1,
+            cui.Separater(dim=True),
+            Order.cols2,
+            cui.Separater(),
+        ])
         p.print_separater()
         p.print_header()
         p.print_separater()
         for order in orders:
             p.print_data(order)
-        p.print_separater()
-        return
 
 
-@main.command('deposit', help="Information for depositting currency to the exchange")
-@click.argument("exchange", type=click.STRING, metavar="<exchange>")
-@click.argument("currency", type=click.STRING, metavar="<currency>")
-@click.option(
-    "--set",
-    "-s",
-    type=(str, str),
-    multiple=True,
+class Deposit:
+    @staticmethod
+    def amount(x: dict) -> any:
+        return '{:,g} {}'.format(x['amount'], x['currency'])
+    
+    @staticmethod
+    def status(x: dict) -> any:
+        status = x['status']
+        if status == 'ok':
+            return cui.Styled(status.upper(), fg='bright_green')
+        else:
+            return cui.Styled(status.upper(), fg='bright_red')
+
+    @staticmethod
+    def duration(x: dict) -> any:
+        updated = x['updated']
+        if updated is None:
+            return '-'
+        ts1 = datetime.fromtimestamp(x['timestamp']/1000).astimezone()
+        ts2 = datetime.fromtimestamp(updated/1000).astimezone()
+        return str(ts2-ts1)
+
+    cols = [
+        cui.Column(lambda x: x['exchange'], 8, "{:<8}", "Exchange"),
+        cui.Column(lambda x: dt(x["timestamp"]), 16, "{:<16}", "Created"),
+        cui.Column(lambda x: Deposit.duration(x), 10, "{:^10}", "Duration"),
+        cui.Column(lambda x: Deposit.amount(x), 12, '{:>12}', 'Amount'),
+        cui.Column(lambda x: Deposit.status(x), 8, "{:^}", "Status"),
+    ]
+
+@main.command('deposit', help="Show deposit history or addresses")
+@click.argument("exchange", type=click.STRING, required=False, metavar='<exchange>')
+@click.argument("currency", type=click.STRING, required=False, metavar="<currency>")
+@click.option("--set", "-s", type=(str, str), multiple=True,
     metavar="<key> <value>",
     help="Set configuration value corresponding to the key",
 )
+@click.option('--raw', '-r', is_flag=True)
 @run_async
-async def exchange_deposit(exchange: str, currency: str, set: list[tuple[str, str]]):
-    async with get_connection(exchange) as conn:
-        # print("\n".join([k for k, v in filter(lambda v: v[1], conn.has.items())]))
+async def exchange_deposit(exchange: str, currency: str, set: list[tuple[str, str]], raw: bool):
+    async with ExchangeList.get(exchange) as exchanges:
+        if currency is None:
+            async def fetch_deposits(conn: ccxt.Exchange) -> list[dict]:
+                deposits = await conn.fetch_deposits()
+                for deposit in deposits:
+                    deposit['exchange'] = conn.id
+                return deposits
+
+            deposits = []
+            tasks = [asyncio.create_task(fetch_deposits(conn)) for conn in exchanges]
+            for task_result in asyncio.as_completed(tasks):
+                try:
+                    result = await task_result
+                    deposits.extend(result)
+                except:
+                    continue
+            deposits.sort(key=lambda x: x['timestamp'])
+
+            if len(deposits) == 0:
+                log.info('There is not deposits')
+                return
+
+            p = cui.RowPrinter(Deposit.cols)
+            p.print_separater()
+            p.print_header()
+            p.print_separater()
+            for deposit in deposits:
+                p.print_data(deposit)
+            p.print_separater()
+            return
+
+        conn = exchanges[0]
+
+        if currency == 'all':
+            if conn.has.get('fetchDepositAddresses', False):
+                result = await conn.fetch_deposit_addresses()
+                click.secho(json.dumps(result, indent=2), dim=True, file=sys.stderr)
+            else:
+                raise click.ClickException(f'{conn.name}) requires <currency> for a')
+            return
+
         if conn.has.get("fetchDepositAddresses", False):
             address = await conn.fetch_deposit_addresses(currency.upper(), dict(set))
             click.secho(json.dumps(address, indent=2), dim=True, file=sys.stderr)
@@ -495,7 +721,23 @@ async def exchange_deposit(exchange: str, currency: str, set: list[tuple[str, st
                 f"Exchange {exchange} does not support fetchDepositAddress"
             )
 
-exchagne_table = [
+async def watch_market(conn: ccxt.Exchange, market: str, timeframe='1h'):
+    if timeframe not in chart_label_config:
+        raise click.ClickException(f"Unknown timeframe={timeframe}")
+    cnt = (plt.tw()-10)//2
+
+    ticker, ohlcv = await asyncio.gather(
+        conn.fetch_ticker(market),
+        conn.fetch_ohlcv(market, timeframe, limit=cnt),
+    )
+    chart = render_chart(market, timeframe, ticker, ohlcv)
+    while True:
+        book = await conn.watch_order_book(market, 20)
+        plt.clear_terminal()
+        click.secho(chart, nl=False)
+        show_orderbook(book)
+
+market_table = [
     cui.Column(lambda name, info: name, 20, name='Name'),
     cui.Column(lambda name, info: info['base'], 5, name='Base'),
     cui.Column(lambda name, info: info['quote'], 5, name='Quote'),
@@ -505,12 +747,13 @@ exchagne_table = [
 @main.command('market', help='Market information or chart')
 @click.argument("exchange", type=click.STRING, metavar="<exchange>")
 @click.argument("market", type=click.STRING, metavar="<market>", required=False)
-@click.argument("interval", type=click.STRING, metavar="<interval>", default='1h', required=False)
+@click.argument("timeframe", type=click.STRING, metavar="<timeframe>", default='1h', required=False)
 @click.option('typename', '--type', '-t', type=click.Choice(['spot', 'swap', 'future']), default=None,
               metavar='<type>', help='Type of market to search')
-@click.option('--raw', '-r', type=click.STRING, is_flag=True)
+@click.option('--raw', '-r', is_flag=True)
+@click.option('--watch', '-w', is_flag=True)
 @run_async
-async def exchange_market(exchange: str, market: str, interval: str = '1h', raw: bool = False, typename: str = None):
+async def exchange_market(exchange: str, market: str, timeframe: str = '1h', raw: bool = False, typename: str = None, watch: bool = False):
     async with get_connection(exchange) as conn:
         markets = await conn.load_markets()
         market = market.upper() if market is not None else None
@@ -519,7 +762,9 @@ async def exchange_market(exchange: str, market: str, interval: str = '1h', raw:
             if raw:
                 util.dump_json(markets[market])
                 return
-            await show_market(conn, market, interval)
+            if watch:
+                await watch_market(conn, market, timeframe)
+            await show_market(conn, market, timeframe)
             return
 
         matched = markets.items()
@@ -537,10 +782,12 @@ async def exchange_market(exchange: str, market: str, interval: str = '1h', raw:
             return
 
         if len(matched) == 1:
-            await show_market(conn, matched[0][0], interval)
+            if watch:
+                await watch_market(conn, matched[0][0], timeframe)
+            await show_market(conn, matched[0][0], timeframe)
             return
 
-        p = cui.RowPrinter(exchagne_table)
+        p = cui.RowPrinter(market_table)
         p.print_separater()
         p.print_header()
         p.print_separater()
@@ -548,8 +795,24 @@ async def exchange_market(exchange: str, market: str, interval: str = '1h', raw:
             p.print_data(name, info)
         p.print_separater()
 
+@main.command('sell-on-deposit', help='Sell currency on deposit')
+@click.argument('exchange', type=click.STRING, metavar="<exchange>")
+@click.argument('market', type=click.STRING, metavar="<market>")
+@run_async
+async def exchange_auto_sell(exchange: str, market: str):
+    async with get_connection(exchange) as conn:
+        await conn.load_markets()
+        market = market.upper()
+        if market not in conn.markets:
+            raise click.ClickException(f"Unknown market={market}")
+        info = conn.market[market.upper()]
+        deposits = await conn.fetch_deposits(symbol=info["base"])
+        max(deposits, key=lambda d: d["timestamp"])
+        conn.watch_deposit_address(info["base"], dict(set))
+        await conn.auto_sell()
 
-@main.command('has', help='List available feature list')
+
+@main.command('has', help='List available API list')
 @click.argument("exchange", type=click.STRING, metavar="<exchange>")
 @click.argument("key", type=click.STRING, metavar="<key>", required=False)
 @run_async
@@ -561,9 +824,9 @@ async def exchange_cap(exchange: str, key: str):
         click.echo('\n'.join(caps))
 
 
-@main.command('query', help='Query property of the exchange')
+@main.command('prop', help='Property of the exchange object')
 @click.argument("exchange", type=click.STRING, metavar="<exchange>")
-@click.argument("key", type=click.STRING, metavar="<key>", required=False)
+@click.argument("key", type=click.STRING, metavar="<key>")
 @run_async
 async def exchange_query(exchange: str, key: str):
     async with get_connection(exchange) as conn:
