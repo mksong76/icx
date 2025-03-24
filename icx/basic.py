@@ -18,13 +18,16 @@ from .cui import Column, Header, MapPrinter, Row, RowPrinter
 
 @click.command()
 @click.argument('addr', type=wallet.ADDRESS)
-@click.option('--full', type=click.BOOL, is_flag=True)
+@click.option('--raw', '-r', type=click.BOOL, is_flag=True)
 @click.option('--height', type=util.INT)
 @click.option('--icx', is_flag=True)
-def get_balance(addr: str, full: bool = False, height: int = None, icx: bool = False):
+def get_balance(addr: str, raw: bool = False, height: int = None, icx: bool = False):
     '''Get balance of the account'''
     svc = service.get_instance()
-    balance = svc.get_balance(util.ensure_address(addr), height=height, full_response=full)
+    balance = svc.get_balance(util.ensure_address(addr), height=height, full_response=raw)
+    if raw:
+        util.dump_json(balance['result'])
+        return
     if icx:
         print(util.format_decimals(balance, 3))
     else:
@@ -33,35 +36,35 @@ def get_balance(addr: str, full: bool = False, height: int = None, icx: bool = F
 
 @click.command()
 @click.argument('ids', nargs=-1)
-@click.option('--full', is_flag=True)
-def get_block(ids: List[str], full: bool = False):
+@click.option('--raw', '-r', is_flag=True)
+def get_block(ids: List[str], raw: bool = False):
     '''Get the block information'''
     svc = service.get_instance()
     if len(ids) == 0:
         ids = [ 'latest']
     for id in ids:
-        blk = svc.get_block(util.ensure_block(id), full_response=full)
-        util.dump_json(blk)
+        blk = svc.get_block(util.ensure_block(id), full_response=raw)
+        util.dump_json(blk if not raw else blk['result'])
 
 @click.command()
 @click.argument('ids', nargs=-1)
-@click.option('--full', is_flag=True)
-def get_tx(ids: List[str], full: bool = False):
+@click.option('--raw', '-r', is_flag=True)
+def get_tx(ids: List[str], raw: bool = False):
     '''Get the transaction information'''
     svc = service.get_instance()
     for id in ids:
-        tx = svc.get_transaction(id, full_response=full)
-        util.dump_json(tx)
+        tx = svc.get_transaction(id, full_response=raw)
+        util.dump_json(tx if not raw else tx['result'])
 
 @click.command()
 @click.argument('ids', nargs=-1)
-@click.option('--full', is_flag=True)
-def get_result(ids: List[str], full: bool = False):
+@click.option('--raw', '-r', is_flag=True)
+def get_result(ids: List[str], raw: bool = False):
     '''Get the transaction result'''
     svc = service.get_instance()
     for id in ids:
-        result = svc.get_transaction_result(id, full_response=full)
-        log.tx_result('Result', result, raw=full)
+        result = svc.get_transaction_result(id, full_response=raw)
+        log.tx_result('Result', result if not raw else result['result'], raw=raw)
 
 @click.command(help="Get data of the hash")
 @click.argument('hash', nargs=-1)
@@ -78,13 +81,13 @@ def get_data(hash: List[str], binary: bool, out: io.RawIOBase):
 
 @click.command(help="Get SCORE status")
 @click.argument("scores", type=util.SCORE, nargs=-1)
-@click.option('--full', is_flag=True)
+@click.option('--raw', '-r', is_flag=True)
 @click.option('--height', type=util.INT)
-def get_score(scores: List[str], height: int = None, full: bool = False):
+def get_score(scores: List[str], height: int = None, raw: bool = False):
     svc = service.get_instance()
     for score in scores:
-        result = svc.get_score_status(score, height=height, full_response=full)
-        util.dump_json(result)
+        result = svc.get_score_status(score, height=height, full_response=raw)
+        util.dump_json(result if not raw else result['result'])
 
 @click.command(help="Get SCORE History")
 @click.argument("score", type=util.SCORE, nargs=1)
