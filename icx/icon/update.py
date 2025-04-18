@@ -1,21 +1,18 @@
 #!/usr/bin/env python3
 
 import json
-import os
 import re
 import sys
 import threading
-from os import link
-from typing import  Dict, List, Tuple
+from typing import Dict, List
 
 import click
-from iconsdk.builder.call_builder import CallBuilder
 
-from ..import network
-
+from .. import network
 from ..inspect import is_private_p2p
 from . import duration
 from .prep import *
+from .. import log
 
 SEED_SERVERS = [ "52.196.159.184:7100" ]
 
@@ -152,8 +149,17 @@ class PReps:
     def update_preps(self, seed: List[str]):
         if len(seed) == 0:
             raise Exception("No seed information")
-        server = p2p_to_rpc(seed[0])
-        main_prep_info = icon_getPReps(server)
+        main_prep_info = None
+        for p2p in seed:
+            server = p2p_to_rpc(p2p)
+            try :
+                main_prep_info = icon_getPReps(server)
+                break
+            except:
+                pass
+        if main_prep_info is None:
+            raise Exception("No valid seed")
+        
         idx = 0
         for prep in main_prep_info['preps']:
             if 'nodeAddress' in prep:
@@ -190,7 +196,7 @@ class PReps:
         self.threads.append(th)
         th.start()
 
-    def dump(self, file: str):
+    def dump_to(self, file: str):
         with open(file, "w") as fd:
             print(json.dumps(self.preps, indent=2), file=fd)
 
@@ -206,9 +212,19 @@ def update_preps_json(obj: dict, server: List[str]):
 
     For example, use "http://myhost:9000/api/v3" for "myhost:7100"
     '''
-    store = obj[CONTEXT_PREP_STORE]
+    store = path.expanduser(obj[CONTEXT_PREP_STORE])
+
     preps = PReps()
     if len(server) == 0:
-        server = network.get_seeds(obj) or SEED_SERVERS
+        try :
+            with open(store, "r") as fd:
+                prep_info: dict = json.load(fd)
+                server = list(iterate_p2p_with_rpc(prep_info))
+        except:
+            server = network.get_seeds(obj) or []
+
+        if len(server) == 0:
+            raise click.ClickException('No seed information')
+
     preps.update_preps(server)
-    preps.dump(os.path.expanduser(store))
+    preps.dump_to(store)

@@ -12,7 +12,7 @@ from iconsdk.wallet.wallet import KeyWallet, Wallet
 
 from .util import CHAIN_SCORE
 
-MAINNET_URL = 'https://ctz.solidwallet.io/api/v3'
+MAINNET_URL = 'https://ctz.solidwallet.io/api/v3/icon_dex'
 MAINNET_NID = '0x1'
 
 

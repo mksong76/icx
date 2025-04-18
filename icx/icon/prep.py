@@ -250,35 +250,31 @@ def search_prep(prep_info:dict, key: str) -> any:
         return preps[0]
     return None
 
-def find_rpc(prep_info:dict) -> Union[str,None]:
+def iterate_p2p_with_rpc(prep_info: dict) -> Iterable[str]:
     for _, prep in prep_info.items():
         if RPC in prep:
-            return prep[RPC]
-    return None
+            yield prep['p2p']
 
 @click.command('get')
 @click.pass_obj
 @click.argument('key', metavar='[<search key>]', type=click.STRING, required=False)
 @click.option('--raw', is_flag=True)
 @click.option('--bonders', is_flag=True)
-@click.option('--height', type=str, default=None)
+@click.option('--height', type=util.INT, default=None)
 def get_prep(obj: dict, key: str, raw: bool, bonders: bool, height: str):
     '''
     Get PRep information
     '''
     if key is None:
         key = asset.get_wallet().get_address()
-    prep_info = None
+
     try:
         prep_info = load_prep_store(obj[CONTEXT_PREP_STORE])
-        rpc = find_rpc(prep_info)
     except:
-        rpc = None
+        pass
 
-    if height is not None:
-        height = int(height, 0)
-    preps = icon_getPReps(rpc, height=height)['preps']
-    netinfo = icon_getNetworkInfo(rpc, height=height)
+    preps = icon_getPReps(height=height)['preps']
+    netinfo = icon_getNetworkInfo(height=height)
     bond_req = bond_requirement_of(netinfo)
 
     if prep_info is None:
@@ -288,7 +284,6 @@ def get_prep(obj: dict, key: str, raw: bool, bonders: bool, height: str):
 
 
     prep_index = None
-
     try :
         prep_index = int(key, 0)-1
     except:
@@ -305,19 +300,19 @@ def get_prep(obj: dict, key: str, raw: bool, bonders: bool, height: str):
                 prep_index = idx
     else:
         while prep_index >= len(preps):
-            preps += icon_getPReps(rpc, len(preps), height=height)['preps']
+            preps += icon_getPReps(start=len(preps), height=height)['preps']
         prep_addr = preps[prep_index]['address']
 
     if prep_index is None:
         raise click.ClickException(f'fail to find PRep key={key}')
 
-    prep_info:dict = icon_getPRep(prep_addr, rpc, height=height)
+    prep_info:dict = icon_getPRep(prep_addr, height=height)
 
     bonds = {}
     if bonders:
-        bonder_list:dict = icon_getBonderList(prep_addr, rpc, height=height)
+        bonder_list:dict = icon_getBonderList(prep_addr, height=height)
         for bonder in bonder_list['bonderList']:
-            bond = icon_getBond(bonder, rpc, height=height)
+            bond = icon_getBond(bonder, height=height)
             bonds[bonder] = bond
 
     if raw :
