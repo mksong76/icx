@@ -103,6 +103,6 @@ def get_apis(addr: str, raw: bool = False, height: int = None, filter: str = Non
                 new_api.append(entry)
         api = new_api
     if raw:
-        print(json.dumps(api, indent=2))
+        util.dump_json(api)
     else:
         click.echo(dumps(api))

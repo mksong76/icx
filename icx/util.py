@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
 
-from datetime import datetime, timedelta, timezone
-import json
-import re
 import sys
+from datetime import datetime, timedelta, timezone
 from enum import Enum
-from time import sleep
 from typing import Any, Union
-import click
 
+import click
 import requests
+
+from . import log
 
 CHAIN_SCORE = 'cx0000000000000000000000000000000000000000'
 GOV_SCORE = 'cx0000000000000000000000000000000000000001'
@@ -62,12 +61,7 @@ def rest_get(url, timeout=1.0) -> Any:
     return resp.json()
 
 def dump_json(value: any, fp=sys.stdout, flush=False):
-    def json_handler(x) -> any:
-        if isinstance(x, bytes):
-            return '0x'+x.hex()
-        raise TypeError(f'UnknownType(type={type(x)})')
-    json.dump(value, fp=fp, indent=2, default=json_handler)
-    print('', file=fp, flush=flush)
+    log.print_json(value, fp, flush)
 
 def ensure_block(id: str) -> Union[int, str]:
     if len(id) >= 64:
@@ -120,7 +114,7 @@ UTC = timezone(timedelta(hours=0), name='UTC')
 def datetime_from_ts(tv: Union[str, int]) -> datetime:
     if type(tv) is str:
         tv = int(tv, 0)
-    return datetime.utcfromtimestamp(tv/10**6).replace(tzinfo=UTC)
+    return datetime.fromtimestamp(tv/10**6, tz=UTC)
 
 def format_dt(dt: datetime) -> str:
     return dt.strftime('%Y-%m-%d %H:%M:%S:%f %Z')
