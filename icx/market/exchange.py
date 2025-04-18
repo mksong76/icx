@@ -74,6 +74,20 @@ def TS(v: int) -> datetime:
     # return datetime.fromtimestamp(v/1000, tz=util.UTC)
     return datetime.fromtimestamp(v/1000).astimezone()
 
+
+class Base:
+    @classmethod
+    def format_fee(clz, fee: dict):
+        if fee:
+            return fvalue(float(fee["cost"]), '-', fee["currency"])
+        else:
+            return '-'
+
+    @classmethod
+    def fee(clz, x: dict):
+        return Base.format_fee(x['fee'])
+
+
 def monday(ts: datetime) -> bool:
     print(ts.hour)
     return ts.weekday() == 0
@@ -139,12 +153,12 @@ def draw_chart(market, timeframe, ticker, ohlcv):
     last, high, low = ticker['last'], ticker['high'], ticker['low']
     mid_x = (df['time'].iloc[-1] + df['time'].iloc[0]) // 2
 
-    plt.hline(last)
     plt.hline(high, color='green')
     plt.hline(low, color='red')
-    plt.text(str(last), x=mid_x, y=last, color='white', alignment='center')
+    plt.hline(last)
     plt.text(str(high), x=mid_x, y=high, color='white', alignment='center')
     plt.text(str(low), x=mid_x, y=low, color='white', alignment='center')
+    plt.text(str(last), x=mid_x, y=last, color='white', alignment='center')
 
     label_config = chart_label_config[timeframe]
     xticks = list(filter(lambda ts: label_config[1](TS(ts)), df['time']))
@@ -154,7 +168,7 @@ def draw_chart(market, timeframe, ticker, ohlcv):
         plt.vertical_line(tick, color='gray')
     plt.grid()
 
-def show_orderbook(book: dict):
+def draw_orderbook(book: dict):
     bar_labels = []
     bar_values = []
     bar_colors = []
@@ -169,6 +183,15 @@ def show_orderbook(book: dict):
 
     plt.theme('clear')
     plt.simple_bar(bar_labels, bar_values, color=bar_colors)
+
+def render_orderbook(book: dict):
+    draw_orderbook(book)
+    output = plt.build()
+    plt.clear_figure()
+    return output
+
+def show_orderbook(book: dict):
+    draw_orderbook(book)
     plt.show()
     plt.clear_figure()
 
@@ -252,63 +275,67 @@ def exchange_list():
         print(ex)
 
 
-@main.command('asset', help='List available assets')
-@click.argument("names", type=click.STRING, nargs=-1, metavar="<name>")
-@click.option("--raw", "-r", is_flag=True, default=False)
-@run_async
-async def exchange_asset(names: list[str], raw: bool):
-    if len(names) == 0:
-        names = get_exchange_configs().keys()
-    if len(names) == 0:
-        return
+async def get_assets(exchanges: list[ccxt.Exchange]) -> dict:
+    exchanges = [x for x in exchanges if x.has.get("fetchBalance", False)]
 
-    p = cui.RowPrinter(
-        [
-            cui.Column(lambda x, n: n, 5, "{:^5s}", "Name"),
-            cui.Column(lambda x, n: x["free"], 15, "{:>,g}", "Available"),
-            cui.Column(lambda x, n: x["used"], 15, "{:>,g}", "Locked"),
-            cui.Column(lambda x, n: x["total"], 15, "{:>,g}", "Total"),
-        ]
-    )
-    accounts = {}
-    async def fetch_balance(n: str):
-        conn = get_connection(n)
-        if not conn.has.get("fetchBalance", False):
-            return
-        balance = await conn.fetch_balance()
-        accounts[n] = balance
-        await conn.close()
-    await asyncio.gather(*[fetch_balance(n) for n in names])
+    if len(exchanges) == 0:
+        return {}
 
+    async def fetch_balance(exchange: ccxt.Exchange):
+        balance = await exchange.fetch_balance()
+        return (exchange.id, balance)
+
+    balances = await asyncio.gather(*[
+        asyncio.create_task(fetch_balance(exchange)) for exchange in exchanges
+    ])
+    return dict(balances)
+
+
+class Asset(Base):
+    cols = [
+        cui.Column(lambda x, n: n, 5, "{:^5s}", "Currency"),
+        cui.Column(lambda x, n: fvalue(x["free"],'-'), 15, "{:>}", "Free"),
+        cui.Column(lambda x, n: fvalue(x["used"],'-'), 15, "{:>}", "Used"),
+        cui.Column(lambda x, n: fvalue(x["total"],'-'), 15, "{:>}", "Total"),
+    ]
+
+
+async def show_assets(exchanges: list[ccxt.Exchange], raw: bool = False):
+    assets = await get_assets(exchanges)
     if raw:
-        util.dump_json(accounts)
+        util.dump_json(assets)
         return
-
-    for n, account in accounts.items():
-        if len(account["free"].keys()) == 0:
-            continue
-        p.print_spanned(0, 4, [n.upper()], reverse=True, underline=True)
+    p = cui.RowPrinter(Asset.cols)
+    for name, asset in assets.items():
+        p.print_spanned(0, 4, [name.upper()], reverse=True, underline=True)
         p.print_header()
-        for base in account["free"].keys():
-            v = account[base]
+        for base in asset["free"].keys():
+            v = asset[base]
             if v["total"] == 0:
                 continue
             p.print_data(v, base, underline=True)
+
+
+@main.command('asset', help='List available assets')
+@click.argument("exchange", type=click.STRING, metavar="<exchange>", required=False)
+@click.option("--raw", "-r", is_flag=True, default=False)
+@run_async
+async def exchange_asset(exchange: str, raw: bool = False):
+    async with ExchangeList.get(exchange) as exchanges:
+        await show_assets(exchanges)
+
 
 async def exchange_sell_deposit(conn: ccxt.Exchange, market: str):
     base = conn.markets[market]['base']
     timestamp: int = None
     finished: list = []
-    console = Console(
-        log_path=False, stderr=True, highlight=False,
-        log_time_format="[%Y-%m-%d %H:%M:%S]",
-    )
+    console: log.Console = log.console
     async def wait_next():
-        with console.status('Sleep 60 seconds for the next deposit...'):
+        with console.status('Sleep 60 seconds for the next check...'):
             await asyncio.sleep(60)
 
     async def wait_ready():
-        with console.status('Sleep 5 seconds for ready...'):
+        with console.status('Sleep 5 seconds for finishing deposit...'):
             await asyncio.sleep(5)
 
     while True:
@@ -387,7 +414,7 @@ async def exchange_sell(
 
         if amount is None:
             await show_market(conn, market)
-            log.info('You have {:,g} {}'.format(available, base))
+            log.info('You have {}'.format(fvalue(available, 'none', base)))
             return
 
         if amount == "all":
@@ -412,13 +439,14 @@ async def exchange_sell(
         click.secho(json.dumps(order, indent=2), dim=True, file=sys.stderr)
         click.echo(order["id"])
 
-def fvalue(v: Optional[float], d: str = "", currency: Optional[str] = None) -> str:
-    if not v:
-        return d
-    elif currency is None:
-        return f'{v:,g}'
+def fvalue(value: Optional[float], default: str = "", currency: Optional[str] = None) -> str:
+    if not value:
+        return default
+    value_str = f'{value:,f}'.rstrip('0').rstrip('.')
+    if currency is None:
+        return value_str
     else:
-        return f'{v:,g} {currency}'
+        return f'{value_str} {currency}'
 
 def to_datetime(v: Union[int, str, datetime]) -> datetime:
     if isinstance(v, datetime):
@@ -432,7 +460,7 @@ def to_datetime(v: Union[int, str, datetime]) -> datetime:
 def dt(v: Union[int, str, datetime]) -> str:
     return to_datetime(v).strftime('%Y-%m-%d %H:%M')
 
-class Order:
+class Order(Base):
     keyword_styles: dict[str, dict] = {
         'buy': dict(fg='bright_green', bold=True),
         'sell': dict(fg='bright_red', bold=True),
@@ -464,10 +492,11 @@ class Order:
         return fvalue(x['amount'], '-', currency)
 
     @staticmethod
-    def fee(x: dict):
-        fee = x['fee']
-        if fee:
-            return fvalue(float(fee["cost"]), '-', fee["currency"])
+    def price(x: dict):
+        if x['price']:
+            return fvalue(x['price'])
+        elif x['average']:
+            return cui.Styled(fvalue(x['average']), fg='yellow')
         else:
             return '-'
 
@@ -476,7 +505,7 @@ class Order:
         cui.Column(lambda x: dt(x["timestamp"]), 16, "{:<16}", "Datetime"),
         cui.Column(lambda x: x["symbol"], 10, "{:^}", "Market"),
         cui.Column(lambda x: Order.amount(x), 10, "{:>}", "Amount"),
-        cui.Column(lambda x: fvalue(x["price"], '-'), 10, "{:>}", "Price"),
+        cui.Column(lambda x: Order.price(x), 10, "{:>}", "Price"),
         cui.Column(lambda x: Order.status(x), 14, "{:^}", "Status"),
     ]
     cols2 = [
@@ -590,20 +619,29 @@ async def exchange_order(exchange: str, id: str, market: str, raw: bool, operati
             orders = await conn.fetch_closed_orders(**kwargs)
             for order in orders:
                 order['exchange'] = conn.id
+                if conn.id == 'upbit':
+                    cost = float(order['info']['executed_funds'])
+                    order['cost'] = cost
+                    if not order['average']:
+                        filled = float(order['info']['executed_volume'])
+                        order['average'] = cost / filled
+
             return orders
 
-        tasks = [asyncio.create_task(fetch_open_orders(conn, **kwargs)) for conn in exchanges]
-        if market is None:
-            exchanges = list(filter(lambda x: not feature(x,'spot','fetchClosedOrders','symbolRequired'), exchanges))
-        tasks.extend([asyncio.create_task(fetch_closed_orders(conn, **kwargs)) for conn in exchanges])
+        with log.console.status('Fetch orders...'):
+            tasks = [asyncio.create_task(fetch_open_orders(conn, **kwargs)) for conn in exchanges]
+            if market is None:
+                exchanges = list(filter(lambda x: not feature(x,'spot','fetchClosedOrders','symbolRequired'), exchanges))
+            tasks.extend([asyncio.create_task(fetch_closed_orders(conn, **kwargs)) for conn in exchanges])
 
-        orders = []
-        for as_completed in asyncio.as_completed(tasks):
-            try :
-                result = await as_completed
-                orders.extend(result)
-            except:
-                continue
+            orders = []
+            for as_completed in asyncio.as_completed(tasks):
+                try :
+                    result = await as_completed
+                    orders.extend(result)
+                except:
+                    continue
+
         orders.sort(key=lambda x: x['timestamp'])
 
         if raw:
@@ -616,7 +654,6 @@ async def exchange_order(exchange: str, id: str, market: str, raw: bool, operati
 
         p = cui.MultiRowPrinter([
             Order.cols1,
-            cui.Separater(dim=True),
             Order.cols2,
             cui.Separater(),
         ])
@@ -630,7 +667,7 @@ async def exchange_order(exchange: str, id: str, market: str, raw: bool, operati
 class Deposit:
     @staticmethod
     def amount(x: dict) -> any:
-        return '{:,g} {}'.format(x['amount'], x['currency'])
+        return fvalue(x['amount'], '-', x['currency'])
     
     @staticmethod
     def status(x: dict) -> any:
@@ -685,6 +722,11 @@ async def exchange_deposit(exchange: str, currency: str, set: list[tuple[str, st
                     continue
             deposits.sort(key=lambda x: x['timestamp'])
 
+            if raw:
+                # util.dump_json(deposits)
+                log.print_json(deposits)
+                return
+
             if len(deposits) == 0:
                 log.info('There is not deposits')
                 return
@@ -703,39 +745,43 @@ async def exchange_deposit(exchange: str, currency: str, set: list[tuple[str, st
         if currency == 'all':
             if conn.has.get('fetchDepositAddresses', False):
                 result = await conn.fetch_deposit_addresses()
-                click.secho(json.dumps(result, indent=2), dim=True, file=sys.stderr)
+                log.print_json(result)
             else:
                 raise click.ClickException(f'{conn.name}) requires <currency> for a')
             return
 
         if conn.has.get("fetchDepositAddresses", False):
-            address = await conn.fetch_deposit_addresses(currency.upper(), dict(set))
-            click.secho(json.dumps(address, indent=2), dim=True, file=sys.stderr)
-            click.echo(address[currency.upper()]["address"])
+            result = await conn.fetch_deposit_addresses(currency.upper(), dict(set))
+            addr_info = result[currency.upper()]
         elif conn.has.get("fetchDepositAddress", False):
-            address = await conn.fetch_deposit_address(currency.upper(), dict(set))
-            click.secho(json.dumps(address, indent=2), dim=True, file=sys.stderr)
-            click.echo(address["address"])
+            addr_info = await conn.fetch_deposit_address(currency.upper(), dict(set))
         else:
             raise click.ClickException(
                 f"Exchange {exchange} does not support fetchDepositAddress"
             )
+        if raw:
+            log.print_json(addr_info)
+            return
+        click.echo(addr_info["address"])
 
 async def watch_market(conn: ccxt.Exchange, market: str, timeframe='1h'):
     if timeframe not in chart_label_config:
         raise click.ClickException(f"Unknown timeframe={timeframe}")
     cnt = (plt.tw()-10)//2
 
-    ticker, ohlcv = await asyncio.gather(
-        conn.fetch_ticker(market),
-        conn.fetch_ohlcv(market, timeframe, limit=cnt),
-    )
+    with log.console.status(f"Fetching information of {market}") as progress:
+        ticker, ohlcv = await asyncio.gather(
+            conn.fetch_ticker(market),
+            conn.fetch_ohlcv(market, timeframe, limit=cnt),
+        )
+    plt.clear_terminal()
     chart = render_chart(market, timeframe, ticker, ohlcv)
     while True:
-        book = await conn.watch_order_book(market, 20)
-        plt.clear_terminal()
-        click.secho(chart, nl=False)
-        show_orderbook(book)
+        order_book = await conn.watch_order_book(market, 20)
+        book = render_orderbook(order_book)
+        cui.tputs('cup', 0, 0)
+        cui.cecho(chart, nl=False)
+        cui.cecho(book, nl=False)
 
 market_table = [
     cui.Column(lambda name, info: name, 20, name='Name'),
@@ -820,16 +866,132 @@ async def exchange_cap(exchange: str, key: str):
     async with get_connection(exchange) as conn:
         caps = [k for k, v in filter(lambda v: v[1], conn.has.items())]
         if key is not None:
-            caps = filter(lambda k: key in k, caps)
+            caps = filter(lambda k: key.lower() in k.lower(), caps)
         click.echo('\n'.join(caps))
 
 
 @main.command('prop', help='Property of the exchange object')
 @click.argument("exchange", type=click.STRING, metavar="<exchange>")
 @click.argument("key", type=click.STRING, metavar="<key>")
+@click.option('--load', '-l', type=click.STRING, metavar="<function for load>")
 @run_async
-async def exchange_query(exchange: str, key: str):
+async def exchange_query(exchange: str, key: str, load: str):
     async with get_connection(exchange) as conn:
+        if load is not None:
+            if not hasattr(conn, load):
+                raise click.ClickException(f'Unknown load function={load}')
+            load_func = getattr(conn, load)
+            await load_func()
         if not hasattr(conn, key):
-            raise click.ClickException(f'Unknown property name={key}')
+            items = [k for k in dir(conn) if key in k]
+            if len(items) == 0:
+                raise click.ClickException(f'Unknown property name={key}')
+            print("\n".join(items))
+            return
         util.dump_json(getattr(conn, key))
+
+class Withdrawal(Base):
+    @staticmethod
+    def value(x: dict):
+        return fvalue(x["amount"], '-', x["currency"])
+
+    OK = cui.Styled('OK', fg='bright_green', bold=True)
+
+    @classmethod
+    def status(clz, x: dict) -> any:
+        status = x['status']
+        if status == 'ok':
+            return clz.OK
+        return cui.Styled(status.upper(), fg='bright_yellow' , bold=True)
+
+    cols1 = [
+        cui.Column(lambda x: x["exchange"], 10, "{:<10}", "Exchange"),
+        cui.Column(lambda x: dt(x["timestamp"]), 16, "{:<16}", "Datetime"),
+        cui.Column(lambda x: Withdrawal.value(x), 20, "{:>}", "Value"),
+        cui.Column(lambda x: Withdrawal.fee(x), 10, "{:>}", "Fee"),
+        cui.Column(lambda x: Withdrawal.status(x), 10, "{:^}", "Status"),
+    ]
+
+
+async def fetch_withdrawals(conn: ccxt.Exchange) -> list[dict]:
+    withdrawals: list[dict] =  await conn.fetch_withdrawals()
+    return [{ **x, 'exchange': conn.id } for x in withdrawals]
+
+
+async def show_withdrawals(exchanges: list[ccxt.Exchange], raw: bool = False):
+    with log.console.status('Fetch asset history...'):
+        tasks = [asyncio.create_task(fetch_withdrawals(conn)) for conn in exchanges]
+        withdrawals = []
+        for as_completed in asyncio.as_completed(tasks):
+            try:
+                result = await as_completed
+                withdrawals.extend(result)
+            except:
+                continue
+    withdrawals.sort(key=lambda x: x['timestamp'])
+    if raw:
+        log.print_json(withdrawals)
+        return
+
+    p = cui.RowPrinter(Withdrawal.cols1)
+    p.print_header()
+    p.print_separater()
+    for w in withdrawals:
+        p.print_data(w)
+    p.print_separater()
+
+
+@main.command('withdraw', help='Withdraw related operations')
+@click.argument('exchange', type=click.STRING, metavar='<exchange>', required=False)
+@click.argument('currency', type=click.STRING, metavar='<currency>', required=False)
+@click.argument('amount', type=click.STRING, metavar='<amount>', required=False)
+@click.argument('address', type=click.STRING, metavar='<address>', required=False)
+@click.option("--raw", "-r", is_flag=True, default=False)
+@click.option('--param', '-p', type=(str,str), multiple=True)
+@run_async
+async def exchange_withdraw(
+    exchange: str,
+    currency: str,
+    amount: str,
+    address: str,
+    raw: bool,
+    param: list[tuple[str, str]]
+):
+    """Withdraw related operations
+
+    Example:
+
+    * `icx exchange withdraw <exchange> <currency> <amount> <address>`: Withdraw asset
+    * `icx exchange withdraw <exchange> <currency>`: Show withdrawable amount
+    * `icx exchange withdraw <exchange>`: Show withdraw history
+    """
+    async with ExchangeList.get(exchange) as exchanges:
+        if currency is None:
+            show_withdrawals(exchanges, raw)
+            return
+
+        conn: ccxt.Exchange = exchanges[0]
+        assets = await get_assets([conn])
+        if conn.id not in assets:
+            raise click.ClickException(f"Unavailable asset information for exchange={conn.id}")
+
+        currency = currency.upper()
+        asset: dict = assets[conn.id].get(currency, None)
+        if asset is None:
+            raise click.ClickException(f"Unknown currency={currency}")
+
+        if amount is None:
+            if raw:
+                util.dump_json(asset)
+            else:
+                p = cui.MapPrinter(Asset.cols)
+                p.print_header()
+                p.print_data(asset, currency, underline=True)
+            return
+        
+        params = dict(param)
+        if amount.lower() in ['all', 'max']:
+            res = conn.withdraw(currency, asset["free"], address, params=params)
+        else:
+            res = conn.withdraw(currency, float(amount), address, params=params)
+        log.print_json(res)
