@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 
 import abc
-from functools import reduce
+import curses
 import math
 import sys
 import textwrap
-from typing import List, Optional, Union
+from functools import reduce
+from typing import List, Optional, Sequence, Union
 
 import click
 
@@ -435,3 +436,29 @@ class MapPrinter:
                         **kwargs_line)
                     name = ''
         return self
+
+term_init = False
+def __setupterm():
+    global term_init
+    if not term_init:
+        curses.setupterm()
+        term_init = True
+
+def tgets(name: str, *params: any) -> str:
+    __setupterm()
+    return str(curses.tparm(curses.tigetstr(name), *params), encoding='utf-8')
+
+
+def tputs(name: str, *params, **kwargs):
+    s = tgets(name, *params)
+    click.secho(s, nl=False, **kwargs)
+
+def cecho(text: str, nl: bool = True, **kwargs):
+    """
+        Clear and print text
+    """
+    t_el = tgets('el')
+    lines = text.split('\n')
+    num = len(lines)
+    for idx, line in enumerate(lines):
+        click.secho(t_el+line, nl=(idx<num-1 or nl), **kwargs)
