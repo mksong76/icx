@@ -9,6 +9,11 @@ setup(
     install_requires=[
         'iconsdk',
         'click',
+        'ccxt',
+        'eth-keyfile',
+        'plotext',
+        'pandas',
+        'rich',
     ],
     entry_points={
         'console_scripts': [
