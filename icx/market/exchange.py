@@ -375,7 +375,7 @@ async def exchange_sell_deposit(conn: ccxt.Exchange, market: str):
                 order = await conn.create_order(market, 'market', 'sell', item['amount'])
                 console.log(f'The order is CREATED id={order["id"]}')
                 while True:
-                    order_detail = await conn.get_order(order['id'])
+                    order_detail = await conn.fetch_order(order['id'])
                     if order_detail['status'] == 'closed':
                         console.log(f'The order is CLOSED')
                         finished.append(item['id'])
