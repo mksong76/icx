@@ -6,9 +6,11 @@ import math
 import sys
 import textwrap
 from functools import reduce
-from typing import List, Optional, Sequence, Union
+from typing import List, Optional, Union
 
 import click
+
+from .richex import Styled
 
 
 def get_align_of(s: Optional[str]) -> str:
@@ -19,44 +21,6 @@ def get_align_of(s: Optional[str]) -> str:
     if '^' in s:
         return '^'
     return '<'
-
-class Styled:
-    def __new__(cls, value: any, **kwargs):
-        if len(kwargs) == 0:
-            return value
-        return super().__new__(cls)
-
-    def __init__(self, value: any, **kwargs) -> None:
-        if isinstance(value, Styled):
-            self.__value = value.value
-            self.__style = value.style.copy()
-            self.__style.update(kwargs)
-        else:
-            self.__value = value
-            self.__style = kwargs
-
-    @property
-    def value(self) -> any:
-        return self.__value
-
-    @property
-    def style(self) -> dict:
-        return self.__style
-
-    def __format__(self, format_spec):
-        s = self.__value.__format__(format_spec)
-        return click.style(s, **self.__style)
-
-    @staticmethod
-    def wrap(value: any, style: Optional[dict] = None) -> any:
-        return Styled(value, **style) if style is not None else value
-
-    @classmethod
-    def unwrap(cls, v: any) -> tuple[any, dict]:
-        if isinstance(v, Styled):
-            return v.__value, v.__style
-        else:
-            return v, None
 
 class Column:
     def __init__(self, get_value, size: int, format: str = None, name: str = '', *, span: int = 1) -> None:

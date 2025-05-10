@@ -1,7 +1,5 @@
 import asyncio
 import copy
-import json
-import sys
 from functools import reduce
 from typing import Optional, TypeVar, Union
 from datetime import datetime
@@ -10,9 +8,9 @@ import ccxt.pro as ccxt
 import click
 import plotext as plt
 import pandas as pd
-from rich.console import Console
 
 from .. import config, cui, log, util
+from ..util import fvalue
 
 CONTEXT_EXCHANGE_CONFIG = "exchange.credentials"
 
@@ -436,17 +434,8 @@ async def exchange_sell(
         else:
             order = await conn.create_order(market, "limit", "sell", amount_value, price)
 
-        click.secho(json.dumps(order, indent=2), dim=True, file=sys.stderr)
-        click.echo(order["id"])
-
-def fvalue(value: Optional[float], default: str = "", currency: Optional[str] = None) -> str:
-    if not value:
-        return default
-    value_str = f'{value:,f}'.rstrip('0').rstrip('.')
-    if currency is None:
-        return value_str
-    else:
-        return f'{value_str} {currency}'
+        log.info(f'Order created market={conn.id}/{market} amount={amount_value} price={price or "market"}', highlight=True)
+        log.print(order["id"])
 
 def to_datetime(v: Union[int, str, datetime]) -> datetime:
     if isinstance(v, datetime):
@@ -810,6 +799,7 @@ async def exchange_market(exchange: str, market: str, timeframe: str = '1h', raw
                 return
             if watch:
                 await watch_market(conn, market, timeframe)
+                return
             await show_market(conn, market, timeframe)
             return
 
@@ -840,22 +830,6 @@ async def exchange_market(exchange: str, market: str, timeframe: str = '1h', raw
         for name, info in matched:
             p.print_data(name, info)
         p.print_separater()
-
-@main.command('sell-on-deposit', help='Sell currency on deposit')
-@click.argument('exchange', type=click.STRING, metavar="<exchange>")
-@click.argument('market', type=click.STRING, metavar="<market>")
-@run_async
-async def exchange_auto_sell(exchange: str, market: str):
-    async with get_connection(exchange) as conn:
-        await conn.load_markets()
-        market = market.upper()
-        if market not in conn.markets:
-            raise click.ClickException(f"Unknown market={market}")
-        info = conn.market[market.upper()]
-        deposits = await conn.fetch_deposits(symbol=info["base"])
-        max(deposits, key=lambda d: d["timestamp"])
-        conn.watch_deposit_address(info["base"], dict(set))
-        await conn.auto_sell()
 
 
 @main.command('has', help='List available API list')

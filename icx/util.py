@@ -3,7 +3,7 @@
 import sys
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from typing import Any, Union
+from typing import Any, Optional, Union
 
 import click
 import requests
@@ -229,3 +229,12 @@ def fee_of(*args: any) -> int:
         if isinstance(arg, dict):
             fee += arg["stepUsed"] * arg["stepPrice"]
     return fee
+
+def fvalue(value: Optional[float], default: str = "", currency: Optional[str] = None) -> str:
+    if not value:
+        return default
+    value_str = f'{value:,f}'.rstrip('0').rstrip('.')
+    if currency is None:
+        return value_str
+    else:
+        return f'{value_str} {currency}'
