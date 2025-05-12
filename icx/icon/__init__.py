@@ -12,21 +12,8 @@ main.add_command(basic.show_account)
 main.add_command(proposal.main)
 
 # for external access
-proposal_main = proposal.main
-
-@click.group('asset', help='ICON Asset related operations')
-@click.option('--key_store', '--ks', metavar='<name>|<file>', help='KeyStore for asset')
-@click.pass_context
-def assets(ctx: click.Context, key_store: str = None):
-    ctx.ensure_object(dict)
-
-assets.add_command(asset.show_asset)
-assets.add_command(asset.transfer)
-assets.add_command(asset.stake_auto)
-assets.add_command(asset.show_delegation)
-assets.add_command(asset.show_price)
-assets.add_command(asset.show_reward)
-assets.add_command(asset.claim_cmd)
+proposal_group = proposal.main
+asset_group = asset.asset
 
 @click.group('prep', help="ICON PRep related operations")
 @click.option('--store', type=click.STRING, default=None, envvar='ICX_PREP_STORE', help='File to store PRep information')

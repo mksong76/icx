@@ -6,9 +6,11 @@ from rich import traceback, style, highlighter
 from rich.console import Console
 from rich.text import Text
 
-from . import util, richex
+from icx import richex
 
-console = Console(log_path=False, stderr=True, highlight=False,
+from . import util, cui
+
+console = Console(log_path=False, stderr=True, highlight=True,
                   log_time_format="[%Y-%m-%d %H:%M:%S]")
 output = Console(log_path=False, stderr=False)
 traceback.install(suppress=[click, asyncio, ccxt], console=console)
@@ -66,26 +68,15 @@ def tx_result(msg: str, tx_result: dict, raw: bool = False):
     log_json(tx_result)
     return
 
-
-  status = richex.Styled('SUCCESS', fg='bright_green', dim=False) if tx_result["status"] == 1 \
-    else richex.Styled('FAILURE', fg='bright_red', dim=False)
-
-  # rows = [
-  #   cui.Row(status, 20, '{}', 'Status'),
-  #   cui.Row(tx_result['txHash'], 66, '{}', 'Tx Hash'),
-  #   cui.Row(tx_result.get('dataType', 'transfer'), 10, '{}', 'Type'),
-  #   cui.Row(util.fvalue(util.fee_of(tx_result)/util.ICX), 18, '{:>} ICX', 'Fee'),
-  #   cui.Row(util.fvalue(tx_result.get('value', 0)/util.ICX), 18, '{:>} ICX', 'Value'),
-  # ]
-  # p = cui.MapPrinter(rows)
-  # p.print_header()
-  # p.print_data(None, underline=True)
+  status = (
+    Text("SUCCESS", Style.SUCCESS) if tx_result["status"] == 1
+    else Text("FAILURE", Style.FAILURE)
+  )
 
   fee = util.fee_of(tx_result)
   tx_hash = tx_result["txHash"]
 
-  text = Text(f'{msg} {status.value} fee={util.fvalue(fee/util.ICX)} txHash={tx_hash}')
+  text = richex.format('{} {} fee={} txHash={}',
+                       msg, status, util.fvalue(fee/util.ICX), tx_hash)
   highlighter.ReprHighlighter().highlight(text)
-  text.highlight_words(['SUCCESS'], 'bright_green')
-  text.highlight_words(['FAILURE'], 'bright_red')
   info(text)

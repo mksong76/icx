@@ -4,8 +4,8 @@ import json
 import locale
 import os
 import sys
-from datetime import timedelta, datetime
 import time
+from datetime import datetime, timedelta
 from typing import Iterable, List, Optional, Tuple, Union
 
 import click
@@ -13,11 +13,11 @@ from iconsdk.builder.call_builder import CallBuilder
 from iconsdk.builder.transaction_builder import CallTransactionBuilder
 from iconsdk.wallet.wallet import Wallet
 
-from .. import basic, service, util, log
+from .. import basic, log, service, util
 from ..config import CONTEXT_CONFIG, Config
 from ..cui import Column, RowPrinter
-from ..market import upbit
-from ..util import (CHAIN_SCORE, ICX, ICX_LOOP, ensure_address, format_decimals)
+from ..market import exchange, upbit
+from ..util import CHAIN_SCORE, ICX, ICX_LOOP, ensure_address, format_decimals
 from ..wallet import wallet
 from .prep import PRep
 
@@ -281,8 +281,12 @@ def get_price() -> tuple[str,int]:
         price = 1
     return sym, price
 
+@click.group('asset', help='ICON Asset related operations')
+@click.pass_context
+def asset(ctx: click.Context):
+    ctx.ensure_object(dict)
 
-@click.command('show')
+@asset.command('show')
 @click.argument('address', type=wallet.ADDRESS, nargs=-1)
 @click.pass_obj
 def show_asset(ctx: dict, address: List[str]):
@@ -370,7 +374,7 @@ def show_asset_of(ctx: dict, addr: str):
         p.print_data(entry, underline=True)
     p.print_data(['ASSET', asset, 1.0, f'1 ICX = {price} {sym}'], reverse=True)
 
-@click.command("auto")
+@asset.command("auto")
 @click.option("--stake", 'target', type=int, metavar='<amount>', help="Amount to stake in ICX (negative for asset-X)")
 @click.option("--noclaim", type=bool, is_flag=True, help='Prevent claimIScore()')
 @click.option('--preps', '-p', type=str, multiple=True, metavar='<prep1>,<prep2>....', help='List of PReps for delegation')
@@ -452,7 +456,7 @@ def stake_auto(ctx: dict, preps: List[str] = None, vpower: int = 0, target: int 
           f'Unstaking={format_decimals(unstaking,3)} ({remains})',
           file=sys.stderr)
 
-@click.command('delegation')
+@asset.command('delegation')
 @click.pass_obj
 def show_delegation(ctx: dict):
     service = AssetService()
@@ -498,7 +502,7 @@ def get_wallet_addr() -> Optional[str]:
     except:
         return None
 
-@click.command('price')
+@asset.command('price')
 @click.argument('amount', type=ICX_LOOP)
 @click.option('--market', type=str)
 def show_price(amount: int, market: str = None):
@@ -506,7 +510,7 @@ def show_price(amount: int, market: str = None):
     value = price*amount//ICX
     click.echo(f'{value:n} {sym}')
 
-@click.command('transfer')
+@asset.command('transfer')
 @click.argument('amount', type=click.STRING, metavar='<amount>')
 @click.argument('to', type=wallet.ADDRESS)
 @click.pass_obj
@@ -653,7 +657,7 @@ def show_rewards_of(address: str, *, height: int = None, terms: int = 7):
         (1, f'{format_decimals(claimable_price,0)} {sym}', '>'),
     ], reverse=True)
 
-@click.command('reward')
+@asset.command('reward')
 @click.argument('address', type=wallet.ADDRESS, nargs=-1)
 @click.option('--height', '-h', type=util.INT, default=None)
 @click.option('--terms', '-t', type=util.INT, default=7)
@@ -683,17 +687,19 @@ class ClaimResult(tuple[int,int,int]):
     def remainder(self) -> int:
         return self[2]
 
-@click.command('claim')
-@click.argument('action', type=click.Choice(['hold', 'transfer', 'delegate', 'bond']), default='hold')
+@asset.command('claim')
+@click.argument('action', type=click.Choice(['hold', 'transfer', 'delegate', 'bond', 'sell']), default='hold')
 @click.option('--all', '-a', is_flag=True, default=False,
               help='Claim all rewards even if it\'s too small')
 @click.option('--dest', '-d', type=wallet.ADDRESS, default=None,
               metavar='<address>', help='Destination address for the operation')
+@click.option('--market', '-m', type=click.STRING, default=None,
+              metavar='<exchange>:<market>', help='Exchange and market name')
 @click.option('--period', '-p', type=util.INT, default=0,
               metavar='<period>', help='Number of terms to wait for the next claim')
 @click.option('--remainder', '-r', type=util.ICX_LOOP, default=0,
               metavar='<remainders of claimed>', help='Remainders of claimed rewards')
-def claim_cmd(all: bool, action:str, dest: str, period: timedelta, remainder: int):
+def claim_cmd(all: bool, action:str, dest: str, market: str, period: timedelta, remainder: int):
     svc = AssetService()
     wallet = get_wallet()
 
@@ -709,9 +715,10 @@ def claim_cmd(all: bool, action:str, dest: str, period: timedelta, remainder: in
 
         if next_term_seq is None or term_seq >= next_term_seq:
             if block_height >= term_start+1:
-                ret = do_claim(svc, wallet, all, action, dest, remainder)
+                ret = do_claim(svc, wallet, all, action,
+                               dest=dest, market=market, remainder=remainder)
                 if ret is not None:
-                    log.debug(f'ClaimResult claimed={ret.claimed/ICX:.3f}, processed={ret.processed/ICX:.3f}, remainder={ret.remainder/ICX:.3f}')
+                    log.info(f'ClaimResult claimed={ret.claimed/ICX:.3f}, processed={ret.processed/ICX:.3f}, remainder={ret.remainder/ICX:.3f}')
                     remainder = ret.remainder
                 if period <= 0:
                     break
@@ -730,7 +737,8 @@ def claim_cmd(all: bool, action:str, dest: str, period: timedelta, remainder: in
             time.sleep(delay.total_seconds())
             log.debug(f'Sleep DONE')
 
-def do_claim(svc: AssetService, wallet: Wallet, all: bool, action: str, dest: str, remainder: int = 0) -> Optional[ClaimResult]:
+def do_claim(svc: AssetService, wallet: Wallet, all: bool, action: str, *,
+             dest: str=None, market: str=None, remainder: int = 0) -> Optional[ClaimResult]:
     log.info('Checking claimable...')
     iscore = svc.query_iscore(wallet.address)
     claimable = int(iscore['estimatedICX'], 0)
@@ -777,8 +785,33 @@ def do_claim(svc: AssetService, wallet: Wallet, all: bool, action: str, dest: st
             result = svc.bond_adjust([], wallet, amount)
             log.tx_result(f'Bond', result)
             txrs.append(result)
+    elif action == 'sell':
+        if market is None:
+            raise click.UsageError('Please specify destination market')
+        do_sell(wallet, market, amount)
     elif action == 'hold':
         return ClaimResult(claimable, value, 0)
     else:
         raise click.UsageError(f'Unknown action: {action}')
     return ClaimResult(claimable, amount, remainder-util.fee_of(*txrs))
+
+
+@asset.command('sell')
+@click.argument('market', metavar='<exchange>:<market>')
+@click.argument('amount', type=util.ICX_LOOP, metavar='<amount>')
+def sell(market: str, amount: int):
+    wallet = get_wallet()
+    do_sell(wallet, market, amount)
+
+
+def do_sell(wallet: Wallet, market: str, amount: int):
+    if amount<ICX or amount%ICX != 0:
+        log.info('Amount is too small or not in ICX unit.')
+        raise click.BadArgumentUsage(f'Invalid amount={util.fvalue(amount/ICX)} ICX (example: "10icx")')
+
+    def transfer_for_sell(addr: str) -> exchange.IsDeposit:
+        result = basic.do_transfer(wallet, addr, amount)
+        log.tx_result('Transfer', result)
+        return exchange.DepositTx(result['txHash'])
+
+    exchange.transfer_and_sell(market, amount/ICX, transfer_for_sell)

@@ -1,7 +1,7 @@
 import asyncio
 import copy
 from functools import reduce
-from typing import Optional, TypeVar, Union
+from typing import Callable, Optional, TypeVar, Union
 from datetime import datetime
 
 import ccxt.pro as ccxt
@@ -21,24 +21,13 @@ def run_async(func: asyncio.Future[Callee]) -> Callee:
         return asyncio.run(func(*args, **kwargs))
     return async_caller
 
-def exchange_as_conn(func: asyncio.Future[Callee]) -> Callee:
-    def handle_async(exchange: str, *args, **kwargs):
-        async def handle_exchange(*args, **kwargs):
-            async with get_connection(exchange) as conn:
-                return await func(conn, *args, **kwargs)
-        return asyncio.run(handle_exchange(*args, **kwargs))
-    return handle_async
-
-@click.group("exchange", help="Exchange related operations")
-@click.option("--auth", "-a", type=click.STRING, default=None,
-    envvar="ICX_EXCHANGE_CONFIG",
-    metavar="<exchanges.json>",
-    help="Authentication credentials for the exchanges",
-)
-def main(auth: str):
-    obj = click.get_current_context().obj
+def handleFlag(obj: dict, auth: str):
     if auth is not None and len(auth) > 0:
         obj[CONTEXT_EXCHANGE_CONFIG] = config.Config(auth)
+
+@click.group("x", help="Exchange related operations")
+def main():
+    pass
 
 
 def get_exchange(name: str, config: dict = None) -> ccxt.Exchange:
@@ -322,11 +311,43 @@ async def exchange_asset(exchange: str, raw: bool = False):
     async with ExchangeList.get(exchange) as exchanges:
         await show_assets(exchanges)
 
+IsDeposit = Callable[[dict], bool]
+DoTransfer = Callable[[str], IsDeposit]
 
-async def exchange_sell_deposit(conn: ccxt.Exchange, market: str):
+class DepositTx:
+    def __init__(self, txid: dict):
+        self.__txid = txid
+
+    def __call__(self, item: dict) -> bool:
+        return self.__txid == item['txid']
+
+    def __str__(self) -> str:
+        return f'DepositTx(txid={self.__txid})'
+
+@run_async
+async def transfer_and_sell(target: str, amount: float, do_transfer: DoTransfer):
+    exchange, market, *others = target.split(':')
+    network = others[0].upper() if len(others) > 0 else None
+
+    async with ExchangeList.get(exchange) as exchanges:
+        if len(exchanges) != 1:
+            raise ValueError(f'Invalid exchange={exchange}')
+        conn: ccxt.Exchange = exchanges[0]
+
+        await conn.load_markets()
+        market_info = conn.markets[market.upper()]
+        currency: str = market_info['base']
+        address_info = await get_deposit_address_info(conn, currency, network)
+
+        target = do_transfer(address_info['address'])
+        await exchange_sell_deposit(conn, market.upper(), targets=[target])
+
+
+async def exchange_sell_deposit(conn: ccxt.Exchange, market: str, start_ts: int = None, targets: list[IsDeposit] = None):
     base = conn.markets[market]['base']
-    timestamp: int = None
+    timestamp: int = start_ts
     finished: list = []
+    remains: list = copy.copy(targets)
     console: log.Console = log.console
     async def wait_next():
         with console.status('Sleep 60 seconds for the next check...'):
@@ -335,10 +356,60 @@ async def exchange_sell_deposit(conn: ccxt.Exchange, market: str):
     async def wait_ready():
         with console.status('Sleep 5 seconds for finishing deposit...'):
             await asyncio.sleep(5)
+    
+    def is_target(item: dict) -> bool:
+        nonlocal remains
+        if remains is None:
+            return True
+
+        for target in remains:
+            if target(item):
+                return True
+        return False
+
+    def remove_target(item: dict) -> bool:
+        nonlocal remains
+        if remains is None:
+            return True
+
+        for idx, target in enumerate(remains):
+            if target(item) == True:
+                remains.pop(idx)
+                return len(remains)>0
+        return True
+
+    async def sell(item: dict):
+        nonlocal finished, console, conn
+        with console.status(f'Sell deposit {Deposit.amount(item)} at {dt(item["timestamp"])}'):
+            console.log(f'Start to sell {Deposit.amount(item)} depositted at {dt(item["timestamp"])}')
+            order = await conn.create_order(market, 'market', 'sell', item['amount'])
+            console.log(f'The order is CREATED id={order["id"]}')
+            while True:
+                try:
+                    order_detail = await conn.fetch_order(order['id'])
+                except:
+                    console.log('Failed to fetch order')
+                    console.print_exception()
+                    await asyncio.sleep(3)
+                    continue
+                if order_detail['status'] == 'closed':
+                    console.log('The order is CLOSED')
+                    finished.append(item['id'])
+                    if not remove_target(item):
+                        return
+                    break
+                await asyncio.sleep(1)
+
 
     while True:
-        with console.status('Fetch deposits ...'):
-            deposits = await conn.fetch_deposits(base, since=timestamp)
+        try :
+            with console.status('Fetch deposits ...'):
+                deposits = await conn.fetch_deposits(base, since=timestamp)
+        except:
+            console.log('Failed to fetch deposits')
+            console.print_exception()
+            await wait_next()
+            continue
 
         if timestamp is None:
             timestamp = max(deposits, key=lambda d: d["timestamp"])['timestamp']
@@ -368,17 +439,12 @@ async def exchange_sell_deposit(conn: ccxt.Exchange, market: str):
             continue
 
         for item in ready:
-            with console.status(f'Sell deposit {Deposit.amount(item)} at {dt(item["timestamp"])}'):
-                console.log(f'Start to sell {Deposit.amount(item)} depositted at {dt(item["timestamp"])}')
-                order = await conn.create_order(market, 'market', 'sell', item['amount'])
-                console.log(f'The order is CREATED id={order["id"]}')
-                while True:
-                    order_detail = await conn.fetch_order(order['id'])
-                    if order_detail['status'] == 'closed':
-                        console.log(f'The order is CLOSED')
-                        finished.append(item['id'])
-                        break
-                    await asyncio.sleep(1)
+            if not is_target(item):
+                finished.append(item['id'])
+                continue
+            await sell(item)
+            if len(remains) == 0:
+                return
 
 
 @main.command('sell', help='Sell currency')
@@ -386,9 +452,12 @@ async def exchange_sell_deposit(conn: ccxt.Exchange, market: str):
 @click.argument('market', type=click.STRING, metavar='<market>', required=False)
 @click.argument('amount', type=click.STRING, metavar='<amount>', required=False)
 @click.argument('price', type=click.FLOAT, metavar='<price>', required=False)
+@click.option('--txid', '-t', type=click.STRING, metavar='<txid>', multiple=True)
+@click.option('--since', '-s', type=click.INT, metavar='<timestamp>', default=None)
 @run_async
 async def exchange_sell(
-    exchange: str, market: str, amount: str, price: float):
+    exchange: str, market: str, amount: str, price: float,
+    txid: list[str], since: int):
     async with get_connection(exchange) as conn:
         _, balance = await asyncio.gather(conn.load_markets(), conn.fetch_balance())
 
@@ -418,7 +487,9 @@ async def exchange_sell(
         if amount == "all":
             amount_value = available
         elif amount == 'deposit':
-            await exchange_sell_deposit(conn, market)
+            targets: Optional[list[IsDeposit]] = [ DepositTx(x) for x in txid ]
+            targets = targets if len(targets) > 0 else None
+            await exchange_sell_deposit(conn, market, start_ts=since, targets=targets)
         else:
             amount_value = float(amount)
         if amount_value > available:
@@ -662,9 +733,9 @@ class Deposit:
     def status(x: dict) -> any:
         status = x['status']
         if status == 'ok':
-            return cui.Styled(status.upper(), fg='bright_green')
+            return cui.Styled(status.upper(), fg='bright_green', reverse=True)
         else:
-            return cui.Styled(status.upper(), fg='bright_red')
+            return cui.Styled(status.upper(), fg='bright_red', reverse=True)
 
     @staticmethod
     def duration(x: dict) -> any:
@@ -677,11 +748,45 @@ class Deposit:
 
     cols = [
         cui.Column(lambda x: x['exchange'], 8, "{:<8}", "Exchange"),
+        cui.Column(lambda x: Deposit.amount(x), 12, '{:>12}', 'Amount'),
         cui.Column(lambda x: dt(x["timestamp"]), 16, "{:<16}", "Created"),
         cui.Column(lambda x: Deposit.duration(x), 10, "{:^10}", "Duration"),
+        cui.Column(lambda x: Deposit.status(x), 8, "{:^}", "Status"),
+    ]
+    cols1 = [
+        cui.Column(lambda x: cui.Styled(x['exchange'], fg='yellow', bold=True),
+                   8, "{:<8}", "Exchange"),
+        cui.Column(lambda x: dt(x["timestamp"]), 16, "{:<16}", "Created"),
         cui.Column(lambda x: Deposit.amount(x), 12, '{:>12}', 'Amount'),
         cui.Column(lambda x: Deposit.status(x), 8, "{:^}", "Status"),
     ]
+    cols2 = [
+        cui.Column(lambda x: x['id'], 40, "{:<36}", 'ID', span=2),
+        cui.Column(lambda x: x["timestamp"], 20, "{:<16}", "Timestamp"),
+        cui.Column(lambda x: Deposit.duration(x), 10, "{:^10}", "Duration"),
+    ]
+    cols3 = [
+        cui.Column(lambda x: x['txid'], 70, "{:<70}", 'TX', span=4),
+    ]
+    sep = cui.Separater()
+    simple = [ cols1, cols2, sep ]
+    detail = [ cols1, cols2, sep, cols3, sep ]
+    detail2 = cols1 + cols2 + cols3
+
+async def get_deposit_address_info(conn: ccxt.Exchange, currency: str, network: str=None) -> str:
+    currency = currency.upper()
+    extra = {
+        "network": network if network else currency,
+    }
+    if conn.has.get("fetchDepositAddresses", False):
+        result = await conn.fetch_deposit_addresses(currency, extra)
+        return result[currency.upper()]
+    elif conn.has.get("fetchDepositAddress", False):
+        return await conn.fetch_deposit_address(currency, extra)
+    else:
+        raise click.ClickException(
+            f"Exchange {conn.id} does not support fetchDepositAddress"
+        )
 
 @main.command('deposit', help="Show deposit history or addresses")
 @click.argument("exchange", type=click.STRING, required=False, metavar='<exchange>')
@@ -690,10 +795,51 @@ class Deposit:
     metavar="<key> <value>",
     help="Set configuration value corresponding to the key",
 )
+@click.option('--id', type=click.STRING, metavar='<id>')
 @click.option('--raw', '-r', is_flag=True)
 @run_async
-async def exchange_deposit(exchange: str, currency: str, set: list[tuple[str, str]], raw: bool):
+async def exchange_deposit(exchange: str, currency: str, set: list[tuple[str, str]],
+                           id: Optional[str], raw: bool):
     async with ExchangeList.get(exchange) as exchanges:
+        if id is not None:
+            async def fetch_deposit(conn: ccxt.Exchange) -> dict:
+                deposit = await conn.fetch_deposit(id)
+                deposit['exchange'] = conn.id
+                return deposit
+
+            deposits = []
+            tasks = [asyncio.create_task(fetch_deposit(conn)) for conn in exchanges]
+            for task_result in asyncio.as_completed(tasks):
+                try:
+                    result = await task_result
+                    deposits.append(result)
+                except:
+                    continue
+            deposits.sort(key=lambda x: x['timestamp'])
+            if raw:
+                log.print_json(deposits)
+                return
+
+            if len(deposits) == 0:
+                log.info('There is not deposits')
+                return
+
+            p = cui.MultiRowPrinter(Deposit.detail)
+            p.print_separater()
+            p.print_header()
+            p.print_separater()
+            for deposit in deposits:
+                p.print_data(deposit)
+
+            # p = cui.MapPrinter(Deposit.detail2)
+            # p.print_separater()
+            # p.print_header()
+            # p.print_separater()
+            # for deposit in deposits:
+            #     p.print_data(deposit)
+            #     p.print_separater()
+            return
+
         if currency is None:
             async def fetch_deposits(conn: ccxt.Exchange) -> list[dict]:
                 deposits = await conn.fetch_deposits()
@@ -720,13 +866,14 @@ async def exchange_deposit(exchange: str, currency: str, set: list[tuple[str, st
                 log.info('There is not deposits')
                 return
 
-            p = cui.RowPrinter(Deposit.cols)
+            if len(deposits)>20:
+                deposits = deposits[-20:]
+            p = cui.MultiRowPrinter(Deposit.simple)
             p.print_separater()
             p.print_header()
             p.print_separater()
             for deposit in deposits:
                 p.print_data(deposit)
-            p.print_separater()
             return
 
         conn = exchanges[0]
@@ -739,19 +886,12 @@ async def exchange_deposit(exchange: str, currency: str, set: list[tuple[str, st
                 raise click.ClickException(f'{conn.name}) requires <currency> for a')
             return
 
-        if conn.has.get("fetchDepositAddresses", False):
-            result = await conn.fetch_deposit_addresses(currency.upper(), dict(set))
-            addr_info = result[currency.upper()]
-        elif conn.has.get("fetchDepositAddress", False):
-            addr_info = await conn.fetch_deposit_address(currency.upper(), dict(set))
-        else:
-            raise click.ClickException(
-                f"Exchange {exchange} does not support fetchDepositAddress"
-            )
+        addr_info = await get_deposit_address_info(conn, currency, dict(set))
+
         if raw:
             log.print_json(addr_info)
             return
-        click.echo(addr_info["address"])
+        log.print(addr_info['address'])
 
 async def watch_market(conn: ccxt.Exchange, market: str, timeframe='1h'):
     if timeframe not in chart_label_config:

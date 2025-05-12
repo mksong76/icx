@@ -31,8 +31,12 @@ CONFIG_NETWORKS='networks'
 @click.option('--ks', envvar='ICX_KEYSTORE',
              metavar='<name|keystore.json>',
              help='Name of the keystore or keystore file')
+@click.option("--auth", "-a", envvar="ICX_EXCHANGE_CONFIG",
+            metavar="<exchanges.json>",
+            help="Authentication credentials for the exchanges",
+)
 @click.pass_context
-def main(ctx: click.Context, net: str = None, url: str = None, nid: str = None, config: str = None, ks: str = None):
+def main(ctx: click.Context, net: str = None, url: str = None, nid: str = None, config: str = None, ks: str = None, auth: str = None):
     ctx.ensure_object(dict)
     config = path.join(click.get_app_dir('ICX'), 'config.json') if config is None else config
     ctx_config = Config(config)
@@ -43,6 +47,8 @@ def main(ctx: click.Context, net: str = None, url: str = None, nid: str = None, 
         network.handleFlag(ctx.obj, net)
     if ks is not None:
         wallet.handleFlag(ctx.obj, ks)
+    if auth is not None:
+        exchange.handleFlag(ctx.obj, auth)
 
 @click.command('time')
 @click.argument('timestamp', type=click.STRING, nargs=-1)
@@ -98,9 +104,9 @@ main.add_command(inspect.show_inspection, 'inspect')
 main.add_command(inspect.show_netinspection, 'netinspect')
 
 main.add_command(icon.main)
-main.add_command(icon.assets)
+main.add_command(icon.asset_group)
 main.add_command(icon.preps)
-main.add_command(icon.proposal_main)
+main.add_command(icon.proposal_group)
 main.add_command(exchange.main)
 
 if __name__ == '__main__':
