@@ -8,6 +8,7 @@ import ccxt.pro as ccxt
 import click
 import plotext as plt
 import pandas as pd
+from rich.progress import Progress
 
 from .. import config, cui, log, util
 from ..util import fvalue
@@ -343,15 +344,21 @@ async def transfer_and_sell(target: str, amount: float, do_transfer: DoTransfer)
         await exchange_sell_deposit(conn, market.upper(), targets=[target])
 
 
-async def exchange_sell_deposit(conn: ccxt.Exchange, market: str, start_ts: int = None, targets: list[IsDeposit] = None):
+async def exchange_sell_deposit(conn: ccxt.Exchange, market: str,
+                                start_ts: int = None,
+                                targets: list[IsDeposit] = None,
+                                interval: int = 60):
     base = conn.markets[market]['base']
     timestamp: int = start_ts
     finished: list = []
     remains: list = copy.copy(targets)
     console: log.Console = log.console
     async def wait_next():
-        with console.status('Sleep 60 seconds for the next check...'):
-            await asyncio.sleep(60)
+        with Progress(console=console, transient=True) as progress:
+            task = progress.add_task( f'Sleep {interval} seconds', total=interval)
+            for i in range(interval):
+                await asyncio.sleep(1)
+                progress.update(task, advance=1)
 
     async def wait_ready():
         with console.status('Sleep 5 seconds for finishing deposit...'):
@@ -412,7 +419,10 @@ async def exchange_sell_deposit(conn: ccxt.Exchange, market: str, start_ts: int 
             continue
 
         if timestamp is None:
-            timestamp = max(deposits, key=lambda d: d["timestamp"])['timestamp']
+            timestamp = max(map(
+                lambda deposit: deposit["timestamp"],
+                deposits
+            )) if len(deposits)>0 else 0
             console.log(f'Waits for the deposits since {dt(timestamp)}')
             await wait_next()
             continue
@@ -450,14 +460,21 @@ async def exchange_sell_deposit(conn: ccxt.Exchange, market: str, start_ts: int 
 @main.command('sell', help='Sell currency')
 @click.argument('exchange', type=click.STRING, metavar='<exchange>')
 @click.argument('market', type=click.STRING, metavar='<market>', required=False)
-@click.argument('amount', type=click.STRING, metavar='<amount>', required=False)
+@click.argument('amount', type=click.STRING, metavar='<amount>|deposit', required=False)
 @click.argument('price', type=click.FLOAT, metavar='<price>', required=False)
-@click.option('--txid', '-t', type=click.STRING, metavar='<txid>', multiple=True)
-@click.option('--since', '-s', type=click.INT, metavar='<timestamp>', default=None)
+@click.option('--txid', '-t', type=click.STRING, multiple=True,
+              metavar='<txid>',
+              help='Transaction ids of deposits to sell (default:all)')
+@click.option('--since', '-s', type=click.INT, default=None,
+              metavar='<timestamp>',
+              help='Start timestamp for deposits to scan (default:now)')
+@click.option('--interval', '-i', type=click.INT, default=60,
+              metavar='<seconds>',
+              help='Interval for checking the deposits (default:60)')
 @run_async
 async def exchange_sell(
     exchange: str, market: str, amount: str, price: float,
-    txid: list[str], since: int):
+    txid: list[str], since: int, interval: int):
     async with get_connection(exchange) as conn:
         _, balance = await asyncio.gather(conn.load_markets(), conn.fetch_balance())
 
@@ -489,7 +506,13 @@ async def exchange_sell(
         elif amount == 'deposit':
             targets: Optional[list[IsDeposit]] = [ DepositTx(x) for x in txid ]
             targets = targets if len(targets) > 0 else None
-            await exchange_sell_deposit(conn, market, start_ts=since, targets=targets)
+            await exchange_sell_deposit(
+                conn,
+                market,
+                start_ts=since,
+                targets=targets,
+                interval=interval,
+            )
         else:
             amount_value = float(amount)
         if amount_value > available:
