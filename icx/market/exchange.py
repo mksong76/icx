@@ -1,6 +1,6 @@
 import asyncio
 import copy
-from functools import reduce
+from functools import reduce, wraps
 from typing import Callable, Optional, TypeVar, Union
 from datetime import datetime
 
@@ -18,6 +18,7 @@ CONTEXT_EXCHANGE_CONFIG = "exchange.credentials"
 Callee = TypeVar("Callee")
 
 def run_async(func: asyncio.Future[Callee]) -> Callee:
+    @wraps(func)
     def async_caller(*args, **kwargs):
         return asyncio.run(func(*args, **kwargs))
     return async_caller
@@ -59,7 +60,6 @@ hour_ms = 60 * minute_ms
 day_ms = 24 * hour_ms
 
 def TS(v: int) -> datetime:
-    # return datetime.fromtimestamp(v/1000, tz=util.UTC)
     return datetime.fromtimestamp(v/1000).astimezone()
 
 
@@ -202,9 +202,9 @@ def exchange_config(name: str, set: list[tuple[str, str]], delete: bool):
     # Just listing configure exhchanges
     if name is None:
         if len(configs) == 0:
-            log.info("No exchanges are configured", bold=True)
+            log.info("No exchanges are configured")
         else:
-            log.info(f'Configured exchanges: {", ".join(configs.keys())}', bold=True)
+            log.info(f'Configured exchanges: {", ".join(configs.keys())}')
         return
 
     if len(set) == 0:
@@ -611,7 +611,7 @@ class Order(Base):
         cui.Column(lambda x, _: Order.status(x), 14, "{:^}", "Status"),
     ]
 
-class ExchangeList(list):
+class ExchangeList(list[ccxt.Exchange]):
     def __new__(cls, *args):
         return super().__new__(cls, *args)
 
@@ -1125,7 +1125,7 @@ async def exchange_withdraw(
                 p.print_header()
                 p.print_data(asset, currency, underline=True)
             return
-        
+
         params = dict(param)
         if amount.lower() in ['all', 'max']:
             res = conn.withdraw(currency, asset["free"], address, params=params)
