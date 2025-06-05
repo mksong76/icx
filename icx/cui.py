@@ -26,6 +26,8 @@ class Column:
     def __init__(self, get_value, size: int, format: str = None, name: str = '', *, span: int = 1) -> None:
         self.__get_value = get_value
         size = max(size, len(name))
+        if size == 0 and type(get_value) is str:
+            size = len(get_value)
         self.__size = size
         align = get_align_of(format)
         if size == 0:

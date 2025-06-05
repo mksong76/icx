@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 import json
 import sys
 from typing import Any, Optional
@@ -119,6 +119,12 @@ class Proposal(dict):
         if ctype == '0x9':
             return json.loads(self['contents']['value']['data'])
 
+    def applied_when(self) -> Optional[datetime]:
+        if 'apply' not in self:
+            return None
+        ts = self['apply']['timestamp']
+        return util.datetime_from_ts(ts)
+
 def summarize_content(c: dict) -> str:
     name = c['name']
     value = c['value']
@@ -130,7 +136,7 @@ def summarize_content(c: dict) -> str:
 
 
 @main.command("list")
-@click.option("--raw", is_flag=True)
+@click.option("--raw", "-r", is_flag=True)
 @click.option('--all', '-a', is_flag=True)
 def list_proposals(*, raw: bool = False, all: bool = False):
     svc = service.get_instance()
@@ -169,7 +175,10 @@ def list_proposals(*, raw: bool = False, all: bool = False):
                     "Voter Count",
                 ),
                 cui.Row(
-                    lambda x: x.get_remaining_time(last_height), 20, '{}', 'Expire'
+                    lambda x: x.get_remaining_time(last_height) or '-', 20, '{}', 'Expire'
+                ),
+                cui.Row(
+                    lambda x: util.format_dt(x.applied_when(), default='-', local=True, delta=True), 20, '{}', 'Applied'
                 ),
             ]
         )

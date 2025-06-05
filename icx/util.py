@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Optional, Union
 
+import arrow
 import click
 import requests
 
@@ -111,13 +112,26 @@ def format_decimals(value: Union[str,int], f: int=2) -> str:
         return f'{{:,}}.{{:0{f}d}}'.format(i_value, f_value)
 
 UTC = timezone(timedelta(hours=0), name='UTC')
-def datetime_from_ts(tv: Union[str, int]) -> datetime:
+def datetime_from_ts(tv: Union[str, int], local: bool = False) -> datetime:
     if type(tv) is str:
         tv = int(tv, 0)
-    return datetime.fromtimestamp(tv/10**6, tz=UTC)
+    dt = datetime.fromtimestamp(tv/10**6, tz=UTC)
+    if local:
+        return dt.astimezone()
+    return dt
 
-def format_dt(dt: datetime) -> str:
-    return dt.strftime('%Y-%m-%d %H:%M:%S:%f %Z')
+def format_dt(dt: Optional[datetime], *, default: str = '', local: bool=False, delta: bool=False) -> str:
+    if dt is None:
+        return default
+
+    if local:
+        dt = dt.astimezone()
+
+    s = dt.strftime('%Y-%m-%d %H:%M:%S:%f %Z')
+    if delta:
+        diff = arrow.get(dt).humanize()
+        return f'{s} ({diff})'
+    return s
 
 class IntegerType(click.ParamType):
     name = "int"
