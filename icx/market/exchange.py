@@ -1,7 +1,7 @@
 import asyncio
 import copy
 from functools import reduce, wraps
-from typing import Callable, Optional, TypeVar, Union
+from typing import Callable, Coroutine, Optional, Union
 from datetime import datetime
 
 import ccxt.pro as ccxt
@@ -15,9 +15,7 @@ from ..util import fvalue
 
 CONTEXT_EXCHANGE_CONFIG = "exchange.credentials"
 
-Callee = TypeVar("Callee")
-
-def run_async(func: asyncio.Future[Callee]) -> Callee:
+def run_async(func: Callable[..., Coroutine]) -> Callable:
     @wraps(func)
     def async_caller(*args, **kwargs):
         return asyncio.run(func(*args, **kwargs))
@@ -295,6 +293,8 @@ async def show_assets(exchanges: list[ccxt.Exchange], raw: bool = False):
         return
     p = cui.RowPrinter(Asset.cols)
     for name, asset in assets.items():
+        if len([ 1 for x in asset["total"].values() if x > 0 ])==0:
+            continue
         p.print_spanned(0, 4, [name.upper()], reverse=True, underline=True)
         p.print_header()
         for base in asset["free"].keys():
@@ -654,16 +654,17 @@ def feature(conn: ccxt.Exchange, *args) -> bool:
 @click.argument('id', type=click.STRING, metavar='<id>', required=False)
 @click.argument('operation', type=click.Choice(['cancel', 'show']),
                 default='show', required=False, metavar='<operation>')
-@click.option('--market', '-m', type=click.STRING, metavar='<market>')
+@click.option('--market', '-m', type=click.STRING, metavar='<market>', default=None)
 @click.option('--raw', '-r', type=click.STRING, is_flag=True)
 @run_async
 async def exchange_order(exchange: str, id: str, market: str, raw: bool, operation: str):
+    market = market.upper() if market else None
     async with ExchangeList.get(exchange) as exchanges:
         if id is not None:
             conn: ccxt.Exchange = exchanges[0]
 
             if operation == 'show':
-                order = await conn.fetch_order(id)
+                order = await conn.fetch_order(id, market, params={ 'acknowledged': True })
                 if raw:
                     util.dump_json(order)
                 else:
@@ -675,7 +676,7 @@ async def exchange_order(exchange: str, id: str, market: str, raw: bool, operati
                     p.print_separater()
                 return
             elif operation == 'cancel':
-                order = await conn.fetch_order(id)
+                order = await conn.fetch_order(id, market, params={ 'acknowledged': True })
                 if order['status'] != 'open':
                     raise click.ClickException('The order is not open')
                 res = click.prompt('Cancel the order? (y/n)',
@@ -683,7 +684,7 @@ async def exchange_order(exchange: str, id: str, market: str, raw: bool, operati
                                    type=click.Choice(['y', 'n']),
                                    err=True)
                 if res == 'y':
-                    await conn.cancel_order(id)
+                    await conn.cancel_order(id, market)
                 return
             else:
                 raise click.ClickException(f'Unhandled operation={operation}')

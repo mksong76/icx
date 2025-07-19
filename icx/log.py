@@ -13,7 +13,7 @@ from . import util, cui
 console = Console(log_path=False, stderr=True, highlight=True,
                   log_time_format="[%Y-%m-%d %H:%M:%S]")
 output = Console(log_path=False, stderr=False)
-traceback.install(suppress=[click, asyncio, ccxt], console=console)
+traceback.install(suppress=[click, asyncio], console=console)
 
 def json_handler(x) -> any:
   if isinstance(x, bytes):
