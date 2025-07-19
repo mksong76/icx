@@ -1,0 +1,30 @@
+[project]
+name = "icx"
+version = "0.1.0"
+description = "Command line tool for ICON network"
+readme = "README.md"
+authors = [
+    { name = "MoonKyu Song", email = "lanterrt@gmail.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "arrow>=1.3.0",
+    "ccxt>=4.4.95",
+    "click>=8.2.1",
+    "eth-keyfile>=0.9.1",
+    "iconsdk>=2.6.0",
+    "pandas>=2.3.1",
+    "plotext>=5.3.2",
+    "requests>=2.32.4",
+    "rich>=14.0.0",
+]
+
+[project.scripts]
+icx = "icx.main:main"
+
+[tool.uv]
+package = true
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
