@@ -19,7 +19,7 @@ CONFIG_BOOKMARK='bookmark'
 CONTEXT_KEYSTORE='keystore.name'
 
 def load_wallet_from_dict(src: dict, pw: str) -> Wallet:
-    fd = io.BytesIO(bytes(json.dumps(src), 'utf-8'))
+    fd = io.StringIO(json.dumps(src))
     sk = extract_key_from_keyfile(fd, bytes(pw, 'utf-8'))
     return KeyWallet.load(sk)
 
