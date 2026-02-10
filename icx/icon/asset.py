@@ -66,19 +66,20 @@ class AssetService:
         blk = self.service.get_block('latest')
         return blk['height']
 
-    def get_balance(self, address: str) -> int:
-        return self.service.get_balance(address)
+    def get_balance(self, address: str, height: Optional[int]) -> int:
+        return self.service.get_balance(address, height)
 
     def get_score_api(self, address: str):
         return self.service.get_score_api(address)
 
-    def get_stake(self, address: str) -> dict:
+    def get_stake(self, address: str, height: Optional[int]) -> dict:
         return self.service.call(CallBuilder(
             to=CHAIN_SCORE,
             method= "getStake",
             params = {
                 "address": address,
-            }
+            },
+            height=height,
         ).build())
 
     def stake_all(self, wallet: Wallet, remain: int = ICX, stake: dict = None ):
@@ -117,13 +118,14 @@ class AssetService:
         return self.service.estimate_and_send_tx(tx, wallet)
 
 
-    def get_delegation(self, address: str) -> dict:
+    def get_delegation(self, address: str, height: Optional[int]) -> dict:
         return self.service.call(CallBuilder(
             to=CHAIN_SCORE,
             method= "getDelegation",
             params = {
                 "address": address,
-            }
+            },
+            height = height,
         ).build())
 
     def delegate_all(self, preps: List[str], wallet: Wallet, target: int = 0, delegation: dict = None):
@@ -172,13 +174,14 @@ class AssetService:
         ).build()
         return self.service.estimate_and_send_tx(tx, wallet)
 
-    def get_bond(self, address: str) -> dict:
+    def get_bond(self, address: str, height: Optional[int]) -> dict:
         return self.service.call(CallBuilder(
             to=CHAIN_SCORE,
             method= "getBond",
             params = {
                 "address": address,
-            }
+            },
+            height = height,
         ).build())
 
     def bond_adjust(self, preps: List[str], wallet: Wallet, change: int, bonds: dict):
@@ -287,16 +290,17 @@ def asset(ctx: click.Context):
     ctx.ensure_object(dict)
 
 @asset.command('show')
+@click.option('--height', type=util.INT, default=None)
 @click.argument('address', type=wallet.ADDRESS, nargs=-1)
 @click.pass_obj
-def show_asset(ctx: dict, address: List[str]):
+def show_asset(ctx: dict, address: List[str], height: Optional[int]):
     if len(address) == 0:
         wallet: Wallet = get_wallet()
         address = [ wallet.get_address() ]
     for item in address:
-        show_asset_of(ctx, item)
+        show_asset_of(ctx, item, height)
 
-def show_asset_of(ctx: dict, addr: str):
+def show_asset_of(ctx: dict, addr: str, height: Optional[int]):
     addr = ensure_address(addr)
     config: Config = ctx[CONTEXT_CONFIG]
     target: Optional[int] = get_stake_target(config, addr, None)
@@ -310,12 +314,12 @@ def show_asset_of(ctx: dict, addr: str):
 
 
     service = AssetService()
-    balance = service.get_balance(addr)
-    iscore = service.query_iscore(addr)
-    stake = service.get_stake(addr)
-    delegation = service.get_delegation(addr)
-    bond = service.get_bond(addr)
-    last_height = service.get_last_height()
+    balance = service.get_balance(addr, height=height)
+    iscore = service.query_iscore(addr, height=height)
+    stake = service.get_stake(addr, height=height)
+    delegation = service.get_delegation(addr, height=height)
+    bond = service.get_bond(addr, height=height)
+    last_height = height or service.get_last_height()
     #print(json.dumps(balance, indent=2))
     #print(json.dumps(stake, indent=2))
     #print(json.dumps(delegation, indent=2))
